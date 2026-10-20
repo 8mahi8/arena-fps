@@ -1,4 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+import { cameraRelativeMove } from './movement.mjs';
 
 const $ = id => document.getElementById(id);
 const touch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
@@ -44,6 +45,13 @@ const player={pos:new THREE.Vector3(0,1.7,14),yaw:0,pitch:0,velY:0,grounded:true
   sliding:0,slideDir:new THREE.Vector3(),eyeHeight:1.7,alive:true,respawn:0};
 let running=false,firing=false;
 const movement={x:0,y:0},keys=new Set();
+let resetTouchControls=()=>{};
+function clearInputs(){
+  keys.clear();
+  firing=false;
+  movement.x=0;movement.y=0;
+  resetTouchControls();
+}
 function aim(dx,dy){
   player.yaw-=dx*.0032;
   player.pitch=THREE.MathUtils.clamp(player.pitch-dy*.0032,-1.42,1.42);
@@ -123,9 +131,8 @@ function jump(){if(running&&player.alive&&player.grounded){player.velY=7;player.
 function desiredMove(){
   const x=THREE.MathUtils.clamp(movement.x+(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0),-1,1);
   const y=THREE.MathUtils.clamp(movement.y+(keys.has('KeyW')?1:0)-(keys.has('KeyS')?1:0),-1,1);
-  const v=new THREE.Vector3(Math.cos(player.yaw)*x+Math.sin(player.yaw)*y,0,
-    Math.sin(player.yaw)*x-Math.cos(player.yaw)*y);
-  return v.lengthSq()>1?v.normalize():v;
+  const v=cameraRelativeMove(x,y,player.yaw);
+  return new THREE.Vector3(v.x,0,v.z);
 }
 function slide(){
   if(!running||!player.alive||!player.grounded||player.sliding>0)return;
@@ -148,7 +155,7 @@ function updatePlayer(dt){
   }
   if(firing||keys.has('Mouse0'))fire();
   const dir=desiredMove(),moving=dir.lengthSq()>.02;
-  const sprint=keys.has('ShiftLeft')||(touch&&dir.length()>.94);
+  const sprint=keys.has('ShiftLeft')||keys.has('ShiftRight')||(touch&&dir.length()>.94);
   let velocity=dir.multiplyScalar(sprint?8:6);
   if(player.sliding>0){
     player.sliding-=dt;
@@ -226,7 +233,17 @@ function updateHUD(dt){
 }
 function setupTouch(){
   const zone=$('moveZone'),base=$('stickBase'),knob=$('stickKnob');
-  let moveId=null,lookId=null,lastX=0,lastY=0;
+  let moveId=null,lookId=null,lastX=0,lastY=0,fireId=null,fireLastX=0,fireLastY=0;
+  function resetStick(){
+    movement.x=0;movement.y=0;
+    knob.style.transform='translate(-50%,-50%)';
+    base.style.left='24%';base.style.bottom='23%';base.style.top='auto';
+    base.style.transform='translate(-50%,50%)';
+  }
+  resetTouchControls=()=>{
+    moveId=null;lookId=null;fireId=null;firing=false;
+    resetStick();document.querySelectorAll('.round.pressed').forEach(el=>el.classList.remove('pressed'));
+  };
   function moveStick(e){
     const r=base.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
     const limit=44,scale=Math.min(1,limit/Math.max(1,Math.hypot(dx,dy)));
@@ -234,13 +251,21 @@ function setupTouch(){
     knob.style.transform='translate(calc(-50% + '+px+'px),calc(-50% + '+py+'px))';
   }
   zone.addEventListener('pointerdown',e=>{
-    if(!running||moveId!==null)return;moveId=e.pointerId;zone.setPointerCapture(e.pointerId);moveStick(e);
+    if(!running||moveId!==null)return;
+    e.preventDefault();moveId=e.pointerId;zone.setPointerCapture(e.pointerId);
+    const r=zone.getBoundingClientRect();
+    base.style.left=(e.clientX-r.left)+'px';
+    base.style.top=(e.clientY-r.top)+'px';
+    base.style.bottom='auto';base.style.transform='translate(-50%,-50%)';
+    moveStick(e);
   });
   zone.addEventListener('pointermove',e=>{if(e.pointerId===moveId)moveStick(e);});
   function endMove(e){
-    if(e.pointerId!==moveId)return;moveId=null;movement.x=0;movement.y=0;knob.style.transform='translate(-50%,-50%)';
+    if(e.pointerId!==moveId)return;moveId=null;resetStick();
   }
-  zone.addEventListener('pointerup',endMove);zone.addEventListener('pointercancel',endMove);
+  zone.addEventListener('pointerup',endMove);
+  zone.addEventListener('pointercancel',endMove);
+  zone.addEventListener('lostpointercapture',endMove);
   const look=$('lookZone');
   look.addEventListener('pointerdown',e=>{
     if(!running||lookId!==null)return;lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;look.setPointerCapture(e.pointerId);
@@ -249,7 +274,9 @@ function setupTouch(){
     if(e.pointerId!==lookId)return;aim(e.clientX-lastX,e.clientY-lastY);lastX=e.clientX;lastY=e.clientY;
   });
   function endLook(e){if(e.pointerId===lookId)lookId=null;}
-  look.addEventListener('pointerup',endLook);look.addEventListener('pointercancel',endLook);
+  look.addEventListener('pointerup',endLook);
+  look.addEventListener('pointercancel',endLook);
+  look.addEventListener('lostpointercapture',endLook);
   function bind(id,down,up=()=>{}){
     const button=$(id);
     button.addEventListener('pointerdown',e=>{
@@ -257,31 +284,80 @@ function setupTouch(){
       button.setPointerCapture(e.pointerId);button.classList.add('pressed');down();
     });
     const end=e=>{e.preventDefault();button.classList.remove('pressed');up();};
-    button.addEventListener('pointerup',end);button.addEventListener('pointercancel',end);
+    button.addEventListener('pointerup',end);
+    button.addEventListener('pointercancel',end);
+    button.addEventListener('lostpointercapture',end);
   }
-  bind('fireBtn',()=>{firing=true;fire();},()=>firing=false);
+  // Fire-button drag aiming: one right thumb can track a moving target while firing.
+  const fireButton=$('fireBtn');
+  fireButton.addEventListener('pointerdown',e=>{
+    if(!running||fireId!==null)return;
+    e.preventDefault();e.stopPropagation();
+    fireId=e.pointerId;fireLastX=e.clientX;fireLastY=e.clientY;
+    fireButton.setPointerCapture(e.pointerId);
+    fireButton.classList.add('pressed');firing=true;fire();
+  });
+  fireButton.addEventListener('pointermove',e=>{
+    if(e.pointerId!==fireId)return;
+    aim(e.clientX-fireLastX,e.clientY-fireLastY);
+    fireLastX=e.clientX;fireLastY=e.clientY;
+  });
+  const endFire=e=>{
+    if(e.pointerId!==fireId)return;
+    fireId=null;firing=false;fireButton.classList.remove('pressed');
+  };
+  fireButton.addEventListener('pointerup',endFire);
+  fireButton.addEventListener('pointercancel',endFire);
+  fireButton.addEventListener('lostpointercapture',endFire);
   bind('jumpBtn',jump);bind('slideBtn',slide);bind('reloadBtn',reload);
 }
 setupTouch();
+const gameKeys=new Set(['KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','Space','KeyC','KeyR']);
 window.addEventListener('keydown',e=>{
-  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
-  keys.add(e.code);if(e.repeat)return;
-  if(e.code==='Space')jump();if(e.code==='KeyC')slide();if(e.code==='KeyR')reload();
+  if(!running||(!touch&&document.pointerLockElement!==renderer.domElement))return;
+  if(e.altKey||e.ctrlKey||e.metaKey||!gameKeys.has(e.code))return;
+  e.preventDefault();
+  keys.add(e.code);
+  if(e.repeat)return;
+  if(e.code==='Space')jump();
+  if(e.code==='KeyC')slide();
+  if(e.code==='KeyR')reload();
 });
-window.addEventListener('keyup',e=>keys.delete(e.code));
-window.addEventListener('blur',()=>{keys.clear();firing=false;movement.x=movement.y=0;});
+window.addEventListener('keyup',e=>{if(gameKeys.has(e.code)){keys.delete(e.code);if(running)e.preventDefault();}});
+window.addEventListener('blur',clearInputs);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)clearInputs();});
 renderer.domElement.addEventListener('pointerdown',e=>{
-  if(!running||touch)return;
-  if(document.pointerLockElement!==renderer.domElement)renderer.domElement.requestPointerLock?.();
-  else if(e.button===0){firing=true;fire();}
+  if(!running||touch||document.pointerLockElement!==renderer.domElement)return;
+  if(e.button===0){firing=true;fire();}
 });
 document.addEventListener('pointerup',()=>{if(!touch)firing=false;});
+document.addEventListener('pointercancel',()=>{if(!touch)firing=false;});
 document.addEventListener('mousemove',e=>{
   if(document.pointerLockElement===renderer.domElement)aim(e.movementX,e.movementY);
 });
-document.addEventListener('pointerlockchange',()=>{if(!document.pointerLockElement)firing=false;});
+document.addEventListener('pointerlockchange',()=>{
+  if(touch)return;
+  if(document.pointerLockElement===renderer.domElement){
+    menu.classList.add('hidden');$('error').textContent='';
+  }else{
+    clearInputs();
+    if(running){
+      menu.classList.remove('hidden');
+      startBtn.textContent='ゲームに戻る →';
+    }
+  }
+});
 startBtn.addEventListener('click',()=>{
-  running=true;menu.classList.add('hidden');if(!touch)renderer.domElement.requestPointerLock?.();
+  running=true;
+  if(touch){menu.classList.add('hidden');return;}
+  if(!renderer.domElement.requestPointerLock){
+    $('error').textContent='このブラウザではマウスの固定ができません。別ブラウザを試してください。';
+    return;
+  }
+  try{
+    const pending=renderer.domElement.requestPointerLock();
+    if(pending?.catch)pending.catch(()=>{$('error').textContent='マウス固定に失敗しました。ページを直接開いて試してください。';});
+  }catch(e){$('error').textContent='マウス固定に失敗しました。もう一度開始してください。';}
 });
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
@@ -290,7 +366,7 @@ let last=performance.now(),frames=0,fpsTimer=0;
 function animate(now){
   requestAnimationFrame(animate);
   const dt=Math.min(.05,(now-last)/1000||.016);last=now;
-  if(running){updatePlayer(dt);updateBots(dt);updateHUD(dt);}
+  if(running&&(touch||document.pointerLockElement===renderer.domElement)){updatePlayer(dt);updateBots(dt);updateHUD(dt);}
   renderer.render(scene,camera);frames++;fpsTimer+=dt;
   if(fpsTimer>1){$('fps').textContent=Math.round(frames/fpsTimer)+' FPS';fpsTimer=0;frames=0;}
 }
