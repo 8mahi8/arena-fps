@@ -19,7 +19,7 @@ Browser-based 3D arena shooter for iPad Safari and desktop. The goal is simple r
 | --- | --- |
 | Left stick: move (full tilt to sprint) | WASD / Shift |
 | Drag right: look | Mouse (click canvas to lock pointer) |
-| FIRE | Left click |
+| FIRE (hold and drag to aim while firing) | Left click |
 | JUMP | Space |
 | SLIDE | C while moving |
 | ↻ | R (reload) |
@@ -40,3 +40,10 @@ Then open http://localhost:8000. The app can be deployed as static files with Gi
 4. Test multiplayer from different devices and Google Sites embedding before calling it a public online version.
 
 **No claim of iPad or Google Sites real-device validation has been made yet.**
+
+## Input reliability improvements
+
+- Forward/strafe movement now matches the camera direction at any yaw.
+- Release held keys, firing, and touch controls on focus loss and input cancellation.
+- On desktop, Escape pauses the action and displays the start/resume dialog until the pointer is locked again.
+- On iPad, place the movement joystick where the left finger first touches; the right shoot button also supports dragging to aim while holding fire.
