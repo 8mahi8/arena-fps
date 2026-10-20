@@ -12,5 +12,10 @@ for(const id of ['game','moveZone','lookZone','fireBtn','jumpBtn','slideBtn','re
 assert.match(js,/three@0\.180\.0/);
 assert.match(js,/raycaster\.intersectObjects/);
 assert.match(js,/player\.health/);
+assert.match(js,/resetTouchControls/);
+assert.match(js,/fireButton.addEventListener\('pointermove'/);
+assert.match(js,/pointerlockchange/);
+assert.match(js,/cameraRelativeMove/);
+assert.ok(html.includes('ドラッグ照準'));
 assert.match(css,/#touchControls/);
 console.log('Static FPS smoke checks passed');
