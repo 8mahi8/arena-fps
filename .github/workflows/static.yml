@@ -13,3 +13,4 @@ jobs:
           node-version: '22'
       - run: node --check src/main.js
       - run: node tests/smoke.mjs
+      - run: node tests/movement.mjs
