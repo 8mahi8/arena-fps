@@ -101,7 +101,7 @@ function fire(){
   camera.updateMatrixWorld(true);
   camera.getWorldPosition(rayOrigin);camera.getWorldDirection(rayDir);
   raycaster.set(rayOrigin,rayDir);raycaster.far=75;
-  const hits=raycaster.intersectObjects([...targets,...obstacles],false);
+  const hits=raycaster.intersectObjects([...targets.filter(m=>m.userData.bot.alive),...obstacles],false);
   let end=rayOrigin.clone().addScaledVector(rayDir,60);
   if(hits.length){
     const first=hits[0];end=first.point;
