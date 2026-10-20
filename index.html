@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#101a2a">
+<title>ARENA FPS — V0.1</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+  <div class="topline"><span class="brand">ARENA <b>FPS</b></span><span class="tag">V0.1 · OFFLINE TEST</span><span id="fps" class="perf">-- FPS</span></div>
+  <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+  <div id="hitmarker">×</div><div id="damage"></div>
+  <div class="hudbottom">
+    <div class="stats"><div>HP <strong id="health">200</strong> <span>/ 200</span></div><div class="healthbar"><div id="healthFill"></div></div><small>KILLS <b id="kills">0</b>　DEATHS <b id="deaths">0</b></small></div>
+    <div class="ammo"><strong id="ammo">30</strong><span> / 30</span><small id="weaponStatus">AR · AUTO</small></div>
+  </div>
+  <div id="message" role="status"></div>
+</div>
+<div id="touchControls">
+  <div id="moveZone"><div id="stickBase"><div id="stickKnob"></div></div></div>
+  <div id="lookZone"></div>
+  <button id="fireBtn" class="round fire">射撃</button>
+  <button id="jumpBtn" class="round jump">JUMP</button>
+  <button id="slideBtn" class="round slide">SLIDE</button>
+  <button id="reloadBtn" class="round reload">↻</button>
+</div>
+<div id="menu" class="menu"><div class="menu-card">
+  <div class="eyebrow">BROWSER FPS · V0.1</div>
+  <h1>ARENA <em>FPS</em></h1>
+  <p>まずは「動く・狙う・撃つ」の感触を試す、3DアリーナFPSの初期版。</p>
+  <div class="info"><strong>200 HPの動く敵</strong><span>30発AR / 長めの撃ち合い / 1人用BOT練習</span></div>
+  <div class="keys"><span>iPad：左で移動 / 右で視点 / ボタンで射撃</span><span>PC：WASD / マウス / 左クリック / Space / Shift / C / R</span></div>
+  <button id="startBtn">ゲーム開始 →</button>
+  <div class="notice">この版は操作感の検証用。オンライン対戦・Googleサイト公開はまだ未設定です。</div>
+  <div id="error" role="alert"></div>
+</div></div>
+<script type="module" src="./src/main.js"></script>
+</body></html>
