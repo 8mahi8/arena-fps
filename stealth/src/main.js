@@ -1,6 +1,6 @@
 // STEALTH DUEL v2 ブラウザ層: 病院マップ / 暗闇とライト / ミニマップ / 発見システム
 import * as THREE from 'three';
-import { createState, step, botHunter, botIntruder, CFG, MAP_ROWS, CELL, TERMINALS, GATES, ZONES, dist, losClear } from './core.mjs';
+import { createState, step, botHunter, botIntruder, CFG, MAP_ROWS, CELL, TERMINALS, GATES, ZONES, LOCKERS, SMOKE_PICKUP, dist, losClear, inSmoke } from './core.mjs';
 import { createNet } from './net.js';
 
 const $ = id => document.getElementById(id);
@@ -93,6 +93,22 @@ const gateMeshes = GATES.map(g0 => {
   g.position.set(g0.x, 0, g0.z); scene.add(g);
   return { group: g, door, lamp };
 });
+const lockerMeshes = LOCKERS.map(l => {
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 0.7), new THREE.MeshLambertMaterial({ color: 0x3d5748 })); box.position.y = 1.1; g.add(box);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.05, 0.06), new THREE.MeshLambertMaterial({ color: 0x5c7a58 })); door.geometry.translate(0.48, 0, 0); door.position.set(-0.48, 1.05, 0.38); g.add(door);
+  for (let vi = 0; vi < 3; vi++) { const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: 0x141c16 })); vent.position.set(0, 1.62 - vi * 0.16, 0.42); g.add(vent); }
+  const plate = textPlate('ロッカー', 1.0, 0.26, '#dff5d8', '#1d3020'); plate.position.set(0, 2.38, 0.2); g.add(plate);
+  // 室外を向くよう、隣の床側に扉を向ける（扉は南向き固定で配置が単純な側を採用）
+  g.position.set(l.x, 0, l.z); scene.add(g);
+  return { group: g, door };
+});
+const smokePickupMesh = new THREE.Group();
+{ const can = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 10), new THREE.MeshBasicMaterial({ color: 0xd8dde2 })); can.position.y = 0.5; smokePickupMesh.add(can);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 6, 18), new THREE.MeshBasicMaterial({ color: 0x9fb4d8 })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.06; smokePickupMesh.add(ring);
+  smokePickupMesh.position.set(SMOKE_PICKUP.x, 0, SMOKE_PICKUP.z); scene.add(smokePickupMesh); }
+const smokeMeshes = [];
+for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(CFG.smokeRadius, 14, 10), new THREE.MeshBasicMaterial({ color: 0x9aa4ae, transparent: true, opacity: 0, depthWrite: false })); m.position.y = 1.2; scene.add(m); smokeMeshes.push(m); }
 function makeFigure(color, visor) {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 1.05, 10), new THREE.MeshLambertMaterial({ color })); body.position.y = 0.85; g.add(body);
@@ -102,8 +118,6 @@ function makeFigure(color, visor) {
 }
 const hunterMesh = makeFigure(0x8c2f39, 0xff3344);
 const intruderMesh = makeFigure(0x1f6f6b, 0x39e6c8);
-const tracePool = [];
-for (let i = 0; i < 24; i++) { const m = new THREE.Mesh(new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: 0x39e6c8, transparent: true, opacity: 0 })); m.rotation.x = -Math.PI / 2; m.position.y = 0.02; scene.add(m); tracePool.push(m); }
 // ライトリグ: スポット＋漏れ光（点光源）＋光錐メッシュ（子はワールド座標で直接置く）
 const _coneGeo = new THREE.ConeGeometry(3.4, 9, 20, 1, true); _coneGeo.translate(0, -4.5, 0); // 頂点を原点に
 const _down = new THREE.Vector3(0, -1, 0);
@@ -127,9 +141,9 @@ function aimRig(rig, p, isSelf) {
 }
 
 // ---- 入力 ----
-const input = { moveX: 0, moveZ: 0, action: false, dash: false, crouchToggle: false, lightToggle: false };
+const input = { moveX: 0, moveZ: 0, action: false, crouchToggle: false, lightToggle: false, smoke: false };
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyC') input.crouchToggle = true; if (e.code === 'KeyF') input.lightToggle = true; if (['ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyC') input.crouchToggle = true; if (e.code === 'KeyF') input.lightToggle = true; if (e.code === 'KeyG') input.smoke = true; if (['ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => keys[e.code] = false);
 let yaw = 0, pitch = 0, pointerLocked = false;
 renderer.domElement.addEventListener('click', () => { if (playing && !isTouch) renderer.domElement.requestPointerLock?.(); });
@@ -163,7 +177,7 @@ const endTouch = e => { for (const t of e.changedTouches) { if (t.identifier ===
 app.addEventListener('touchend', endTouch); app.addEventListener('touchcancel', endTouch);
 function bindHold(id, on, off) { const el = $(id); const s = e => { e.preventDefault(); el.classList.add('on'); on(); }, x = e => { e.preventDefault(); el.classList.remove('on'); off?.(); }; el.addEventListener('touchstart', s); el.addEventListener('touchend', x); el.addEventListener('mousedown', s); el.addEventListener('mouseup', x); }
 bindHold('btnAction', () => input.action = true, () => input.action = false);
-bindHold('btnDash', () => input.dash = true, () => input.dash = false);
+bindHold('btnSmoke', () => input.smoke = true);
 bindHold('btnCrouch', () => input.crouchToggle = true);
 bindHold('btnLight', () => input.lightToggle = true);
 
@@ -175,22 +189,23 @@ function beginPlay(role) {
   const me = role === 'intruder' ? st.intruder : st.hunter; yaw = me.yaw; pitch = 0;
   $('titleScreen').classList.add('hidden'); $('endScreen').classList.add('hidden'); $('gameHud').classList.remove('hidden');
   $('roleLabel').textContent = role === 'intruder' ? '🕵️ 侵入者' : '🔦 ハンター';
-  $('btnDash').style.display = role === 'intruder' ? 'flex' : 'none';
+  $('btnSmoke').style.display = role === 'intruder' ? 'flex' : 'none';
   $('btnCrouch').style.display = role === 'intruder' ? 'flex' : 'none';
   $('btnLight').style.display = role === 'intruder' ? 'flex' : 'none';
-  $('btnAction').textContent = role === 'intruder' ? '操作' : '捕獲';
+  $('btnAction').textContent = '操作';
   notice(role === 'intruder' ? '病院に潜入。端末を探して2台起動し、南の玄関から脱出' : '赤ライトで病院を守れ。端末の反応を頼りに捕まえろ', 3000);
 }
 function startMatch(role) { st = createState(); botMemH = {}; botMemI = {}; beginPlay(role); }
 function endMatch() {
   playing = false; document.exitPointerLock?.();
   const win = (st.phase === 'intruder_win') === (playerRole === 'intruder');
-  $('endTitle').textContent = st.phase === 'intruder_win' ? '侵入者の脱出成功' : (st.reason === 'capture' ? 'ハンターが捕獲' : '時間切れ｜ハンターの守備成功');
+  $('endTitle').textContent = st.phase === 'intruder_win' ? '侵入者の脱出成功' : (st.reason === 'capture' ? 'ハンターが捕獲' : st.reason === 'locker' ? 'ロッカーの中で捕まった' : '時間切れ｜ハンターの守備成功');
   $('endDetail').textContent = (win ? 'あなたの勝ち。' : 'あなたの負け。') + `\n経過 ${st.t.toFixed(0)}秒／起動 ${st.devices.filter(d => d.done).length}台／発見 ${st.knownDevices.length}台`;
   $('gameHud').classList.add('hidden'); $('endScreen').classList.remove('hidden');
 }
+let brightV = 1;
 const brightRange = $('brightRange');
-if (brightRange) brightRange.addEventListener('input', () => { const v = Number(brightRange.value) / 100; ambLight.intensity = 1.25 * v; hemiLight.intensity = 0.7 * v; });
+if (brightRange) brightRange.addEventListener('input', () => { brightV = Number(brightRange.value) / 100; });
 $('playIntruder').onclick = () => { mode = 'offline'; startMatch('intruder'); };
 $('playHunter').onclick = () => { mode = 'offline'; startMatch('hunter'); };
 $('rematch').onclick = () => { if (mode === 'offline') startMatch(playerRole); else location.reload(); };
@@ -201,10 +216,10 @@ function playerInput() {
   const inp = {
     moveX: Math.abs(stickVec.x) > 0.12 ? stickVec.x : s,
     moveZ: Math.abs(stickVec.y) > 0.12 ? -stickVec.y : f,
-    yaw, action: input.action || !!keys.Space, dash: input.dash || !!keys.ShiftLeft || !!keys.ShiftRight,
-    crouchToggle: input.crouchToggle, lightToggle: input.lightToggle,
+    yaw, action: input.action || !!keys.Space,
+    crouchToggle: input.crouchToggle, lightToggle: input.lightToggle, smoke: input.smoke,
   };
-  input.crouchToggle = false; input.lightToggle = false;
+  input.crouchToggle = false; input.lightToggle = false; input.smoke = false;
   return inp;
 }
 function consumeEvents() {
@@ -215,6 +230,10 @@ function consumeEvents() {
     if (playerRole === 'intruder' && ev.type === 'ping') notice('信号が漏れた…ハンターに伝わった', 1600);
     if (ev.type === 'device_done') notice(`${st.devices[ev.deviceId]?.name || '端末'} 起動完了`, 1600);
     if (ev.type === 'gates_open') notice('玄関ゲートが開いた！', 2200);
+    if (ev.type === 'marked') notice(playerRole === 'intruder' ? '⚠ 捕捉された！視線を切れ！' : '捕捉した！詰め切れ', 2000);
+    if (ev.type === 'locker_in' && playerRole === 'hunter' && ev.seen) notice('ロッカーに入ったのを見た', 1800);
+    if (ev.type === 'locker_empty' && playerRole === 'hunter') notice('ロッカーは空だった…', 1400);
+    if (ev.type === 'smoke_pickup' && playerRole === 'intruder') notice('煙幕を拾った', 1200);
   }
 }
 // ---- オンライン ----
@@ -229,7 +248,9 @@ function snapOf() {
     light: st.intruder.lightOn ? 1 : 0,
     devices: st.devices.map(d => [d.tid, +d.progress.toFixed(1), d.done ? 1 : 0]),
     known: st.knownDevices, gatesOpen: st.gatesOpen, capture: +st.capture.toFixed(2), gateChannel: +st.gateChannel.toFixed(2),
-    traces: st.traces.map(t => [+t.x.toFixed(1), +t.z.toFixed(1), +t.ttl.toFixed(1)]),
+    stalk: +st.stalk.toFixed(2), marked: +st.marked.toFixed(1), hidden: st.intruder.hidden,
+    smokes: st.smokes.map(t => [+t.x.toFixed(1), +t.z.toFixed(1), +t.ttl.toFixed(1)]), smokeStock: st.smokeStock, pickupTaken: st.smokePickupTaken,
+    lockerOpen: [st.lockerOpen.idx, +st.lockerOpen.progress.toFixed(2)],
     hunterKnow: [st.hunterKnow.deviceId, +st.hunterKnow.at.toFixed(1)], events: hostEvents,
   };
 }
@@ -242,7 +263,9 @@ function applySnap(s) {
   st.devices = s.devices.map((d, i) => ({ id: i, tid: d[0], x: TERMINALS[d[0]].x, z: TERMINALS[d[0]].z, name: TERMINALS[d[0]].name, progress: d[1], done: !!d[2], charge: 0, pingAt: -1, pinged: false }));
   st.knownDevices = s.known || [];
   st.gatesOpen = s.gatesOpen; st.capture = s.capture; st.gateChannel = s.gateChannel;
-  st.traces = s.traces.map(t => ({ x: t[0], z: t[1], ttl: t[2] }));
+  st.stalk = s.stalk || 0; st.marked = s.marked || 0; st.intruder.hidden = s.hidden ?? -1;
+  st.smokes = (s.smokes || []).map(t => ({ x: t[0], z: t[1], ttl: t[2] })); st.smokeStock = s.smokeStock ?? 1; st.smokePickupTaken = !!s.pickupTaken;
+  st.lockerOpen = { idx: s.lockerOpen ? s.lockerOpen[0] : -1, progress: s.lockerOpen ? s.lockerOpen[1] : 0 };
   st.hunterKnow = { deviceId: s.hunterKnow[0], at: s.hunterKnow[1] };
   const evs = s.events || [];
   for (let i = guestEventCount; i < evs.length; i++) st.events.push(evs[i]);
@@ -257,7 +280,7 @@ function setupNet() {
     onStatus2: s => { if (s) $('netStatus').textContent = '状態: ' + s; },
     onPresence: (me, peer) => { $('netStart').classList.toggle('hidden', !(net.isHost && peer)); if (net.code) $('netStatus').textContent = `部屋 ${net.code}／${peer ? '友達が来ました' : '友達を待っています'}`; },
     onRoomReady: () => {},
-    onGuestInput: v => { guestInput = { moveX: v.moveX || 0, moveZ: v.moveZ || 0, yaw: v.yaw || 0, action: !!v.action, dash: !!v.dash, crouchToggle: !!v.crouchToggle, lightToggle: !!v.lightToggle }; },
+    onGuestInput: v => { guestInput = { moveX: v.moveX || 0, moveZ: v.moveZ || 0, yaw: v.yaw || 0, action: !!v.action, crouchToggle: !!v.crouchToggle, lightToggle: !!v.lightToggle, smoke: !!v.smoke }; },
     onSnapshot: s => applySnap(s),
   });
   return net;
@@ -330,6 +353,9 @@ function frame(now) {
 }
 function render() {
   if (!st) { renderer.render(scene, camera); return; }
+  const iHidden = st.intruder.hidden >= 0;
+  ambLight.intensity = 1.25 * brightV * (iHidden && playerRole === 'intruder' ? 1.8 : 1);
+  hemiLight.intensity = 0.7 * brightV * (iHidden && playerRole === 'intruder' ? 1.5 : 1);
   const me = playerRole === 'intruder' ? st.intruder : st.hunter;
   const foe = playerRole === 'intruder' ? st.hunter : st.intruder;
   const myMesh = playerRole === 'intruder' ? intruderMesh : hunterMesh;
@@ -343,8 +369,8 @@ function render() {
   // ライト
   const myP = { x: me.x, z: me.z, yaw };
   if (playerRole === 'hunter') { aimRig(hunterRig, myP, true); hunterRig.spot.visible = true; hunterRig.point.visible = true; aimRig(intruderRig, { x: foe.x, z: foe.z, yaw: foe.yaw }, false); intruderRig.spot.visible = intruderRig.point.visible = st.intruder.lightOn; intruderRig.cone.visible = st.intruder.lightOn; }
-  else { aimRig(intruderRig, myP, true); intruderRig.spot.visible = intruderRig.point.visible = st.intruder.lightOn; aimRig(hunterRig, { x: foe.x, z: foe.z, yaw: foe.yaw }, false); hunterRig.spot.visible = hunterRig.point.visible = true; hunterRig.cone.visible = true; }
-  scene.fog.far = playerRole === 'hunter' ? 32 : (st.intruder.lightOn ? 30 : 13);
+  else { aimRig(intruderRig, myP, true); intruderRig.spot.visible = intruderRig.point.visible = st.intruder.lightOn && st.intruder.hidden < 0; aimRig(hunterRig, { x: foe.x, z: foe.z, yaw: foe.yaw }, false); hunterRig.spot.visible = hunterRig.point.visible = true; hunterRig.cone.visible = true; }
+  scene.fog.far = (playerRole === 'intruder' && inSmoke(st, me)) ? 8 : (playerRole === 'hunter' ? 32 : (st.intruder.lightOn ? 30 : 13));
   // 端末の見た目: 有効端末のみ画面が光る
   for (const tm of termMeshes) {
     const dev = st.devices.find(dv => dv.x === tm.group.position.x && dv.z === tm.group.position.z);
@@ -352,9 +378,11 @@ function render() {
     tm.bar.scale.x = dev ? Math.max(0.001, dev.progress / CFG.deviceTime) : 0.001;
   }
   gateMeshes.forEach(m => { m.lamp.material.color.set(st.gatesOpen ? 0x39e6a3 : 0xff4444); m.door.position.x = st.gatesOpen ? 0.85 : 0; });
-  st.traces.forEach((tr, i) => { if (i < tracePool.length) { const m = tracePool[i]; m.position.x = tr.x; m.position.z = tr.z; m.material.opacity = Math.min(0.55, tr.ttl / CFG.traceLife * 0.55); } });
-  for (let i = st.traces.length; i < tracePool.length; i++) tracePool[i].material.opacity = 0;
-  renderer.render(scene, camera);
+  st.smokes.forEach((sm, i) => { if (i < smokeMeshes.length) { const m = smokeMeshes[i]; m.position.x = sm.x; m.position.z = sm.z; m.material.opacity = Math.min(0.5, sm.ttl / CFG.smokeTime * 0.6); } });
+  for (let i = st.smokes.length; i < smokeMeshes.length; i++) smokeMeshes[i].material.opacity = 0;
+  smokePickupMesh.visible = !st.smokePickupTaken;
+  lockerMeshes.forEach((lm, i) => { const occupied = st.intruder.hidden === i; const opening = st.lockerOpen.idx === i ? st.lockerOpen.progress / CFG.lockerOpenTime : 0; lm.door.rotation.y = -(occupied ? 0.5 : 0) - opening * 0.9; if (st.lockerOpen.idx === i && st.lockerOpen.progress > 0) lm.group.position.x = LOCKERS[i].x + Math.sin(performance.now() / 40) * 0.02; else lm.group.position.x = LOCKERS[i].x; });
+  intruderMesh.visible = st.intruder.hidden < 0;  renderer.render(scene, camera);
   if (!playing) return;
   const tl = Math.max(0, st.timeLeft);
   $('timer').textContent = `${Math.floor(tl / 60)}:${String(Math.floor(tl % 60)).padStart(2, '0')}`;
@@ -364,11 +392,22 @@ function render() {
   let prog = -1;
   if (playerRole === 'intruder') { const d = st.devices.find(d => !d.done && dist(me, d) < CFG.interactRange); if (d) prog = d.progress / CFG.deviceTime; if (st.gatesOpen && GATES.some(g => dist(me, g) < CFG.interactRange)) prog = st.gateChannel / CFG.gateTime; }
   else if (st.capture > 0) prog = st.capture / CFG.captureTime;
+  let barColor = '#57d7ff';
+  if (prog < 0 && playerRole === 'hunter' && st.lockerOpen.progress > 0) { prog = st.lockerOpen.progress / CFG.lockerOpenTime; barColor = '#e8eef4'; }
+  if (prog < 0 && st.stalk > 0.02) { prog = st.stalk; barColor = st.marked > 0 ? '#ff4040' : '#ff9a3c'; }
+  if (playerRole === 'intruder' && st.intruder.hidden < 0 && performance.now() - (render._lkHint || 0) > 5000 && LOCKERS.some(l => dist(me, l) < 2.1)) { render._lkHint = performance.now(); notice('「操作」でロッカーに隠れる', 1500); }
+  if (prog < 0 && playerRole === 'hunter' && st.capture > 0) { prog = st.capture; barColor = '#ff4040'; }
   $('progressWrap').style.display = prog >= 0 ? 'block' : 'none';
-  if (prog >= 0) $('progressBar').style.width = Math.min(100, prog * 100) + '%';
+  if (prog >= 0) { $('progressBar').style.width = Math.min(100, prog * 100) + '%'; $('progressBar').style.background = barColor; }
+  if (playerRole === 'intruder') $('btnSmoke').textContent = `煙幕 ×${st.smokeStock}`;
+  $('lockerOverlay').style.display = (playerRole === 'intruder' && st.intruder.hidden >= 0) ? 'block' : 'none';
+  if (playerRole === 'intruder' && st.lockerOpen.idx === st.intruder.hidden && st.intruder.hidden >= 0 && st.lockerOpen.progress > 0) notice('ロッカーが開けられている！！', 300);
   if (playerRole === 'intruder') {
     const d = dist(me, foe);
-    $('vignette').style.opacity = d < CFG.proximityRange ? String(Math.min(0.9, (1 - d / CFG.proximityRange) * 1.15)) : '0';
+    let vo = d < CFG.proximityRange ? Math.min(0.9, (1 - d / CFG.proximityRange) * 1.15) : 0;
+    if (st.marked > 0) vo = Math.max(vo, 0.6 + 0.3 * Math.sin(performance.now() / 90));
+    else if (st.stalk > 0.03) vo = Math.max(vo, st.stalk * 0.75 * (0.75 + 0.25 * Math.sin(performance.now() / Math.max(90, 300 - 200 * st.stalk))));
+    $('vignette').style.opacity = String(Math.min(0.95, vo));
     const ar = $('proxArrow');
     if (d < CFG.proximityRange) { const rel = Math.atan2(foe.x - me.x, -(foe.z - me.z)) - yaw; ar.style.display = 'block'; ar.style.transform = `translate(-50%,-50%) rotate(${rel}rad) translateY(-64px)`; }
     else ar.style.display = 'none';

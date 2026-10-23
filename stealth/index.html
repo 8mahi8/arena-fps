@@ -45,6 +45,7 @@
 <div class="hud">
   <div id="gameHud" class="hidden">
     <div id="vignette"></div>
+  <div id="lockerOverlay"></div>
     <div id="topbar"><span id="roleLabel"></span><span id="timer">3:00</span><span id="devCount"></span></div>
     <div id="objective"></div>
     <div id="notice"></div>
@@ -55,13 +56,13 @@
     <div id="stick"><div id="stickKnob"></div></div>
     <canvas id="minimap" width="200" height="150"></canvas>
     <div id="btnAction" class="tbtn">操作</div>
-    <div id="btnDash" class="tbtn">ダッシュ</div>
+    <div id="btnSmoke" class="tbtn">煙幕</div>
     <div id="btnCrouch" class="tbtn">しゃがみ</div>
     <div id="btnLight" class="tbtn">ライト</div>
   </div>
   <div id="titleScreen" class="screen">
     <h1>STEALTH DUEL</h1>
-    <p>夜の病院を舞台にした3D潜入1vs1。病院には端末候補が6台あり、そのうち有効なのは4台。侵入者は探して見つけた端末を2台起動し、南の玄関から脱出。ハンターは赤ライト（常時点灯）で守り、捕まえるか4分間守り切れば勝ち。<br>暗闇ではライトが要ります。でも侵入者がライトを点けると、遠くからでもバレます。ハンターの赤い光の漏れを見たら、近づいています。</p>
+    <p>夜の病院を舞台にした3D潜入1vs1。病院には端末候補が6台あり、そのうち有効なのは4台。侵入者は探して見つけた端末を2台起動し、南の玄関から脱出。ハンターは赤ライト（常時点灯）で守り、捕まえるか4分間守り切れば勝ち。<br>暗闇ではライトが要ります。でも侵入者がライトを点けると、遠くからでもバレます。ハンターの赤い光の漏れを見たら、近づいています。見つめ続けられると「捕捉」され、近づかれたら終わりです。ロッカーに隠れたり煙幕で視線を切りましょう。</p>
     <div class="row">
       <button class="bigbtn" id="playIntruder">侵入者で遊ぶ（vs BOTハンター）</button>
       <button class="bigbtn sub" id="playHunter">ハンターで遊ぶ（vs BOT侵入者）</button>
@@ -70,7 +71,7 @@
         <input id="brightRange" type="range" min="60" max="170" value="100" style="width:150px">
       </div>
     </div>
-    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで端末・捕獲・脱出／「ライト」で点灯切替（侵入者のみ）<br>PC: WASD＋マウス、Space長押し=操作、Shift=ダッシュ、C=しゃがみ、F=ライト</p>
+    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで端末・捕獲・脱出／「ライト」で点灯切替、「煙幕」で視線を切る（侵入者のみ）<br>PC: WASD＋マウス、Space長押し=操作、C=しゃがみ、F=ライト、G=煙幕</p>
     <div style="border-top:1px solid rgba(140,190,255,.25);padding-top:14px;width:min(560px,92vw)">
       <p style="font-weight:800;margin-bottom:8px">オンライン対戦（部屋番号）</p>
       <div class="row">

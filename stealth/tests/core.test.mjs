@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert';
-import { createState, step, bfsPath, isWall, isBlocked, TERMINALS, GATES, CFG, losClear, seesHunter } from '../src/core.mjs';
+import { createState, step, bfsPath, isWall, isBlocked, TERMINALS, GATES, LOCKERS, CFG, losClear, seesHunter, inSmoke } from '../src/core.mjs';
 const idle = { moveX: 0, moveZ: 0, action: false };
 function run(st, inputs, sec) { const dt = 1 / 20; for (let i = 0; i < sec / dt; i++) step(st, inputs, dt); }
 test('スポーンから全端末候補・両ゲートへ到達できる', () => {
@@ -67,15 +67,45 @@ test('2台完了でゲートが開き、脱出できる', () => {
   run(st, { intruder: { ...idle, action: true }, hunter: idle }, 0.7);
   assert.equal(st.phase, 'intruder_win');
 });
-test('捕獲は正面・視線・長押しで成立し、壁越しとスポーン直後は成立しない', () => {
+test('捕獲は接触で自動成立し、スポーン直後は成立しない', () => {
   let st = createState(42); st.t = 10;
-  st.hunter.x = st.intruder.x; st.hunter.z = st.intruder.z + 1.5;
-  run(st, { hunter: { ...idle, action: true, yaw: 0 }, intruder: idle }, 0.8);
-  assert.equal(st.phase, 'hunter_win');
+  st.hunter.x = st.intruder.x; st.hunter.z = st.intruder.z + 1.2;
+  run(st, { hunter: idle, intruder: idle }, 0.6);
+  assert.equal(st.phase, 'hunter_win'); assert.equal(st.reason, 'capture');
   st = createState(42);
-  st.hunter.x = st.intruder.x; st.hunter.z = st.intruder.z + 1.5;
-  run(st, { hunter: { ...idle, action: true, yaw: 0 }, intruder: idle }, 1.2);
+  st.hunter.x = st.intruder.x; st.hunter.z = st.intruder.z + 1.2;
+  run(st, { hunter: idle, intruder: idle }, 1.2);
   assert.equal(st.phase, 'play'); // スポーン保護5秒
+});
+test('注視ゲージは視線を保つと溜まって捕捉になり、視線を切ると減る', () => {
+  const st = createState(42); st.t = 10;
+  st.hunter.x = 33; st.hunter.z = 29; st.hunter.yaw = 0; st.intruder.x = 33; st.intruder.z = 23; // 6m正面
+  run(st, { hunter: { ...idle, yaw: 0 }, intruder: idle }, 2.4);
+  assert.ok(st.marked > 0, `marked=${st.marked} stalk=${st.stalk}`);
+  st.intruder.x = 5; st.intruder.z = 3; // 遠くへ消える
+  const before = st.stalk;
+  run(st, { hunter: { ...idle, yaw: 0 }, intruder: idle }, 3);
+  assert.ok(st.stalk < before, `stalk ${before} -> ${st.stalk}`);
+});
+test('ロッカーに隠れると見えなくなり、ハンターが開け切ると捕まる', () => {
+  const st = createState(42); st.t = 10;
+  const lk = LOCKERS[0];
+  st.intruder.x = lk.x; st.intruder.z = lk.z + 1.2;
+  run(st, { intruder: { ...idle, action: true }, hunter: idle }, 0.2);
+  assert.ok(st.intruder.hidden >= 0, 'hidden=' + st.intruder.hidden);
+  st.hunter.x = lk.x; st.hunter.z = lk.z + 1.2; st.hunter.yaw = 0;
+  assert.equal(seesHunter(st), false);
+  run(st, { hunter: idle, intruder: idle }, 1.1);
+  assert.equal(st.phase, 'hunter_win'); assert.equal(st.reason, 'locker');
+});
+test('煙幕の中では視認も捕獲もできない', () => {
+  const st = createState(42); st.t = 10;
+  st.hunter.x = 33; st.hunter.z = 29; st.hunter.yaw = 0; st.intruder.x = 33; st.intruder.z = 27.5;
+  step(st, { intruder: { ...idle, smoke: true }, hunter: idle }, 0.05);
+  assert.ok(inSmoke(st, st.intruder));
+  assert.equal(seesHunter(st), false);
+  run(st, { hunter: idle, intruder: idle }, 1);
+  assert.equal(st.phase, 'play'); assert.equal(st.capture, 0);
 });
 test('時間切れはハンター勝ち／壁と遮蔽には入れない', () => {
   const st = createState(42); run(st, { hunter: idle, intruder: idle }, CFG.matchTime + 1);

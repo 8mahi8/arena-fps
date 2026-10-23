@@ -45,6 +45,7 @@
 <div class="hud">
   <div id="gameHud" class="hidden">
     <div id="vignette"></div>
+  <div id="lockerOverlay"></div>
     <div id="topbar"><span id="roleLabel"></span><span id="timer">3:00</span><span id="devCount"></span></div>
     <div id="objective"></div>
     <div id="notice"></div>
@@ -55,13 +56,13 @@
     <div id="stick"><div id="stickKnob"></div></div>
     <canvas id="minimap" width="200" height="150"></canvas>
     <div id="btnAction" class="tbtn">操作</div>
-    <div id="btnDash" class="tbtn">ダッシュ</div>
+    <div id="btnSmoke" class="tbtn">煙幕</div>
     <div id="btnCrouch" class="tbtn">しゃがみ</div>
     <div id="btnLight" class="tbtn">ライト</div>
   </div>
   <div id="titleScreen" class="screen">
     <h1>STEALTH DUEL</h1>
-    <p>夜の病院を舞台にした3D潜入1vs1。病院には端末候補が6台あり、そのうち有効なのは4台。侵入者は探して見つけた端末を2台起動し、南の玄関から脱出。ハンターは赤ライト（常時点灯）で守り、捕まえるか4分間守り切れば勝ち。<br>暗闇ではライトが要ります。でも侵入者がライトを点けると、遠くからでもバレます。ハンターの赤い光の漏れを見たら、近づいています。</p>
+    <p>夜の病院を舞台にした3D潜入1vs1。病院には端末候補が6台あり、そのうち有効なのは4台。侵入者は探して見つけた端末を2台起動し、南の玄関から脱出。ハンターは赤ライト（常時点灯）で守り、捕まえるか4分間守り切れば勝ち。<br>暗闇ではライトが要ります。でも侵入者がライトを点けると、遠くからでもバレます。ハンターの赤い光の漏れを見たら、近づいています。見つめ続けられると「捕捉」され、近づかれたら終わりです。ロッカーに隠れたり煙幕で視線を切りましょう。</p>
     <div class="row">
       <button class="bigbtn" id="playIntruder">侵入者で遊ぶ（vs BOTハンター）</button>
       <button class="bigbtn sub" id="playHunter">ハンターで遊ぶ（vs BOT侵入者）</button>
@@ -70,7 +71,7 @@
         <input id="brightRange" type="range" min="60" max="170" value="100" style="width:150px">
       </div>
     </div>
-    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで端末・捕獲・脱出／「ライト」で点灯切替（侵入者のみ）<br>PC: WASD＋マウス、Space長押し=操作、Shift=ダッシュ、C=しゃがみ、F=ライト</p>
+    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで端末・捕獲・脱出／「ライト」で点灯切替、「煙幕」で視線を切る（侵入者のみ）<br>PC: WASD＋マウス、Space長押し=操作、C=しゃがみ、F=ライト、G=煙幕</p>
     <div style="border-top:1px solid rgba(140,190,255,.25);padding-top:14px;width:min(560px,92vw)">
       <p style="font-weight:800;margin-bottom:8px">オンライン対戦（部屋番号）</p>
       <div class="row">
@@ -116,12 +117,12 @@ export const CELL = 2;
 export const MAP_ROWS = [
   '################################',
   '#I........#..........#.........#',
-  '#.B.B.B...#..B.B.B...#..B.B.B..#',
+  '#.B.B.B.L.#..B.B.B...#..B.B.B..#',
   '#.........#.S........#.......D.#',
-  '#.............B......#.........#',
+  '#.............B......#.L.......#',
   '#.B.B.B...#....................#',
   '#.........#..B.B.....#..B...B..#',
-  '#....D....#........S.#.........#',
+  '#....D....#.L......S.#.........#',
   '#.........#..........#.....#...#',
   '####.###########.#########.#####',
   '#.........#....#.....#.........#',
@@ -129,13 +130,13 @@ export const MAP_ROWS = [
   '#..B......#..S.....S.........S.#',
   '#.S.D........SS.D.SS.#......D..#',
   '#..B......#..S.....S.#...B.B...#',
-  '#.S...BS..#..SSS.SSS.#.......S.#',
+  '#.S...BSL.#..SSS.SSS.#.L.....S.#',
   '#.........#.....#....#.........#',
   '#####.##########.########.######',
   '#........#............#........#',
-  '#....S...#..B......B...........#',
+  '#....S.L.#..B......B...........#',
   '#..D...........B......#....S...#',
-  '#....B...#......H.....#...B....#',
+  '#....B...#.L....H.....#...B....#',
   '#.....G..#.....##.....#..G.....#',
   '################################',
 ];
@@ -143,13 +144,16 @@ export const W = MAP_ROWS[0].length, H = MAP_ROWS.length;
 export const CFG = {
   matchTime: 240,
   hunterSpeed: 5.2, intruderSpeed: 4.7, crouchSpeed: 2.4,
-  dashSpeed: 7.6, dashTime: 0.7, dashCooldown: 6,
   radius: 0.35,
+  stalkTimes: { near: 2.2, mid: 3.5, far: 6 }, stalkDecayTime: 4, markedTime: 20,
+  contactRange: 1.4, contactRangeMarked: 1.8, captureTime: 0.45, captureTimeMarked: 0.12,
+  lockerOpenTime: 0.9, lockerRange: 1.7,
+  smokeTime: 5, smokeRadius: 3.5, smokeMax: 2,
   deviceTime: 7, devicesNeeded: 2, activeDevices: 4,
   pingChargeTime: 3, pingDelay: 4,
-  captureRange: 2.3, captureTime: 0.6, captureStagger: 0.8, spawnProtect: 5,
+  captureStagger: 0.8, spawnProtect: 5,
   gateTime: 0.5, interactRange: 1.9,
-  traceLife: 6, restealthTime: 5,
+  restealthTime: 5,
   proximityRange: 12,
   discoverRange: 6, discoverRangeLit: 9,
   visionRange: 14, visionRangeLit: 26,
@@ -167,11 +171,13 @@ export const ZONES = [
 ];
 function cellAt(cx, cz) { if (cx < 0 || cz < 0 || cx >= W || cz >= H) return '#'; return MAP_ROWS[cz][cx]; }
 export function cellAtWorld(wx, wz) { return cellAt(Math.floor(wx / CELL), Math.floor(wz / CELL)); }
-export function isWall(wx, wz) { const c = cellAtWorld(wx, wz); return c === '#' || c === 'S'; } // 視線・移動を完全に遮る
-export function isBlocked(wx, wz) { const c = cellAtWorld(wx, wz); return c === '#' || c === 'S' || c === 'B'; } // 移動を遮る
+export function isWall(wx, wz) { const c = cellAtWorld(wx, wz); return c === '#' || c === 'S' || c === 'L'; } // 視線・移動を完全に遮る
+export function isBlocked(wx, wz) { const c = cellAtWorld(wx, wz); return c === '#' || c === 'S' || c === 'B' || c === 'L'; } // 移動を遮る
 function findCells(ch) { const out = []; for (let z = 0; z < H; z++) for (let x = 0; x < W; x++) if (MAP_ROWS[z][x] === ch) out.push({ x: x * CELL + 1, z: z * CELL + 1 }); return out; }
 export const TERMINALS = findCells('D').map((p, i) => ({ tid: i, x: p.x, z: p.z, name: ['酸素供給装置', '病棟端末', '薬局端末', '医療端末', '手術室端末', '配電盤'][i] }));
 export const GATES = findCells('G');
+export const LOCKERS = findCells('L');
+export const SMOKE_PICKUP = { x: 33, z: 21 };
 const SPAWNS = { intruder: findCells('I')[0], hunter: findCells('H')[0] };
 
 export function losClear(x1, z1, x2, z2, targetCrouch = false) {
@@ -194,12 +200,15 @@ export function createState(seed) {
   return {
     t: 0, timeLeft: CFG.matchTime, phase: 'play', reason: '', seed,
     hunter: { x: SPAWNS.hunter.x, z: SPAWNS.hunter.z, yaw: 0, stagger: 0, captureCd: 0 },
-    intruder: { x: SPAWNS.intruder.x, z: SPAWNS.intruder.z, yaw: Math.PI, crouch: false, dashT: 0, dashCd: 0, unseen: 99, lightOn: false },
+    intruder: { x: SPAWNS.intruder.x, z: SPAWNS.intruder.z, yaw: Math.PI, crouch: false, unseen: 99, lightOn: false, hidden: -1, entryPos: null },
     devices: active.map((tid, i) => ({ id: i, tid, x: TERMINALS[tid].x, z: TERMINALS[tid].z, name: TERMINALS[tid].name, progress: 0, done: false, charge: 0, pingAt: -1, pinged: false })),
     knownDevices: [], // 侵入者が発見済みの device id
     gatesOpen: false,
     capture: 0, gateChannel: 0,
-    traces: [], events: [],
+    stalk: 0, marked: 0,
+    smokes: [], smokeStock: 1, smokePickupTaken: false,
+    lockerOpen: { idx: -1, progress: 0 }, lockerKnown: -1,
+    events: [],
     hunterKnow: { deviceId: -1, at: -99 },
     metrics: { firstPingAt: -1, firstDeviceAt: -1, doneAt: -1, captureAt: -1, seenTime: 0, discoveredAt: -1 },
   };
@@ -217,9 +226,11 @@ function applyMove(p, input, speed, dt) {
   moveCircle(p, wx * speed * dt, wz * speed * dt);
   return true;
 }
-const idle = () => ({ moveX: 0, moveZ: 0, action: false, dash: false, crouchToggle: false, lightToggle: false });
+const idle = () => ({ moveX: 0, moveZ: 0, action: false, crouchToggle: false, lightToggle: false, smoke: false });
+export function inSmoke(st, p) { return st.smokes.some(s => Math.hypot(s.x - p.x, s.z - p.z) < CFG.smokeRadius); }
 export function seesHunter(st) { // ハンターが侵入者を視認しているか
   const hu = st.hunter, it = st.intruder, d = dist(hu, it);
+  if (it.hidden >= 0 || inSmoke(st, it)) return false;
   const range = it.lightOn ? CFG.visionRangeLit : (it.crouch ? CFG.visionRange - 3 : CFG.visionRange);
   if (d >= range) return false;
   if (!losClear(hu.x, hu.z, it.x, it.z, it.crouch)) return false;
@@ -233,26 +244,56 @@ export function step(st, inputs, dt) {
   hu.yaw = hi.yaw ?? hu.yaw; it.yaw = ii.yaw ?? it.yaw;
   if (ii.crouchToggle) it.crouch = !it.crouch;
   if (ii.lightToggle) it.lightOn = !it.lightOn;
-  it.dashCd = Math.max(0, it.dashCd - dt);
-  if (ii.dash && it.dashCd <= 0 && it.dashT <= 0) { it.dashT = CFG.dashTime; it.dashCd = CFG.dashCooldown; }
-  const dashing = it.dashT > 0; if (dashing) it.dashT -= dt;
   hu.stagger = Math.max(0, hu.stagger - dt);
   if (hu.stagger <= 0) applyMove(hu, hi, CFG.hunterSpeed, dt);
-  const iSpeed = dashing ? CFG.dashSpeed : (it.crouch ? CFG.crouchSpeed : CFG.intruderSpeed);
-  const moved = applyMove(it, ii, iSpeed, dt);
-  if (dashing && moved) { const last = st.traces[st.traces.length - 1]; if (!last || Math.hypot(last.x - it.x, last.z - it.z) > 0.9) st.traces.push({ x: it.x, z: it.z, ttl: CFG.traceLife }); }
-  st.traces = st.traces.filter(tr => (tr.ttl -= dt) > 0);
+  // 煙幕
+  st.smokes = st.smokes.filter(s => (s.ttl -= dt) > 0);
+  if (ii.smoke && st.smokeStock > 0 && it.hidden < 0) { st.smokes.push({ x: it.x, z: it.z, ttl: CFG.smokeTime }); st.smokeStock--; st.events.push({ type: 'smoke', t: st.t }); }
+  if (!st.smokePickupTaken && it.hidden < 0 && dist(it, SMOKE_PICKUP) < 1.4 && st.smokeStock < CFG.smokeMax) { st.smokePickupTaken = true; st.smokeStock++; st.events.push({ type: 'smoke_pickup', t: st.t }); }
+  // ロッカー出入り（侵入者: 近くで action）
+  if (ii.action && !st._lockerLatch) {
+    st._lockerLatch = true;
+    if (it.hidden >= 0) { const e = it.entryPos; it.x = e.x; it.z = e.z; it.hidden = -1; it.entryPos = null; st.events.push({ type: 'locker_out', t: st.t }); }
+    else { const li = LOCKERS.findIndex(l => dist(it, l) < 1.6); if (li >= 0) { const seenEntry = seesHunter(st); it.entryPos = { x: it.x, z: it.z }; it.x = LOCKERS[li].x; it.z = LOCKERS[li].z; it.hidden = li; if (seenEntry) st.lockerKnown = li; st.events.push({ type: 'locker_in', locker: li, seen: seenEntry, t: st.t }); } }
+  } else if (!ii.action) st._lockerLatch = false;
+  const hiddenNow = it.hidden >= 0;
+  if (!hiddenNow) applyMove(it, ii, it.crouch ? CFG.crouchSpeed : CFG.intruderSpeed, dt);
+  // ロッカー開錠（ハンター: 占有ロッカーの前に立つ）
+  if (hiddenNow) {
+    const lk = LOCKERS[it.hidden];
+    if (dist(hu, lk) < CFG.lockerRange && hu.stagger <= 0) {
+      if (st.lockerOpen.idx !== it.hidden) { st.lockerOpen.idx = it.hidden; st.lockerOpen.progress = 0; }
+      st.lockerOpen.progress += dt;
+      if (st.lockerOpen.progress >= CFG.lockerOpenTime) { st.phase = 'hunter_win'; st.reason = 'locker'; st.metrics.captureAt = st.t; st.events.push({ type: 'locker_catch', t: st.t }); }
+    } else st.lockerOpen.progress = Math.max(0, st.lockerOpen.progress - dt * 2);
+  } else if (st.lockerOpen.idx >= 0 && st.lockerOpen.progress > 0) {
+    // 侵入者が出た後にハンターが開け切ったら空振りの硬直
+    const lk = LOCKERS[st.lockerOpen.idx];
+    if (dist(hu, lk) < CFG.lockerRange) { st.lockerOpen.progress += dt; if (st.lockerOpen.progress >= CFG.lockerOpenTime) { hu.stagger = 0.4; st.lockerOpen = { idx: -1, progress: 0 }; if (st.lockerKnown >= 0) st.lockerKnown = -1; st.events.push({ type: 'locker_empty', t: st.t }); } }
+    else { st.lockerOpen = { idx: -1, progress: 0 }; }
+  }
   // 端末の発見（侵入者）: 近づいて視線が通れば発見。ライト点灯中は遠くからでも
   for (const d of st.devices) {
+    if (hiddenNow || inSmoke(st, it)) break;
     if (d.done || st.knownDevices.includes(d.id)) continue;
     const range = it.lightOn ? CFG.discoverRangeLit : CFG.discoverRange;
     if (dist(it, d) < range && losClear(it.x, it.z, d.x, d.z)) { st.knownDevices.push(d.id); st.events.push({ type: 'discovered', deviceId: d.id, t: st.t }); if (st.metrics.discoveredAt < 0) st.metrics.discoveredAt = st.t; }
   }
   const seen = seesHunter(st);
   if (seen) { it.unseen = 0; st.metrics.seenTime += dt; } else it.unseen += dt;
+  // 注視ゲージ（案1）: 距離で蓄積速度が変わる。視線を切ると減衰、満タンで「捕捉」状態
+  if (seen) {
+    const dS = dist(hu, it);
+    const tFull = dS < 8 ? CFG.stalkTimes.near : dS < 16 ? CFG.stalkTimes.mid : CFG.stalkTimes.far;
+    st.stalk = Math.min(1, st.stalk + dt / tFull);
+    if (st.stalk >= 1 && st.marked <= 0) { st.marked = CFG.markedTime; st.events.push({ type: 'marked', t: st.t }); }
+  } else if (it.unseen > 1 || hiddenNow || inSmoke(st, it)) {
+    st.stalk = Math.max(0, st.stalk - dt / (hiddenNow || inSmoke(st, it) ? 1.5 : CFG.stalkDecayTime));
+  }
+  if (st.marked > 0) { st.marked -= dt; if (st.marked <= 0) { st.marked = 0; st.stalk = Math.min(st.stalk, 0.5); } }
   // 装置操作
   let channeling = null;
-  if (ii.action && !dashing) for (const d of st.devices) { if (!d.done && dist(it, d) < CFG.interactRange) { channeling = d; break; } }
+  if (ii.action && !hiddenNow) for (const d of st.devices) { if (!d.done && dist(it, d) < CFG.interactRange) { channeling = d; break; } }
   if (channeling) {
     if (!st.knownDevices.includes(channeling.id)) st.knownDevices.push(channeling.id);
     channeling.progress += dt; channeling.charge += dt;
@@ -270,14 +311,15 @@ export function step(st, inputs, dt) {
   if (st.gatesOpen && ii.action) for (const g of GATES) if (dist(it, g) < CFG.interactRange) { gateNow = true; break; }
   st.gateChannel = gateNow ? st.gateChannel + dt : 0;
   if (st.gateChannel >= CFG.gateTime) { st.phase = 'intruder_win'; st.reason = 'escape'; }
-  // 捕獲
-  const dHI = dist(hu, it);
-  const canCapture = st.t >= CFG.spawnProtect && hu.stagger <= 0 && dHI < CFG.captureRange && losClear(hu.x, hu.z, it.x, it.z, it.crouch) && angleDiff(aimYaw(hu, it), hu.yaw) < 1.5;
-  if (hi.action && canCapture) {
-    st.capture += dt;
-    if (st.capture >= CFG.captureTime) { st.phase = 'hunter_win'; st.reason = 'capture'; st.metrics.captureAt = st.t; }
+  // 捕獲（接触式・ボタン不要）: 範囲+視線で自動で溜まる。8割以上で逃げ切られるとハンターがよろける
+  const capRange = st.marked > 0 ? CFG.contactRangeMarked : CFG.contactRange;
+  const capTime = st.marked > 0 ? CFG.captureTimeMarked : CFG.captureTime;
+  const canCap = st.t >= CFG.spawnProtect && hu.stagger <= 0 && !hiddenNow && !inSmoke(st, it) && dist(hu, it) < capRange && losClear(hu.x, hu.z, it.x, it.z, it.crouch);
+  if (canCap) {
+    st.capture += dt / capTime;
+    if (st.capture >= 1) { st.phase = 'hunter_win'; st.reason = 'capture'; st.metrics.captureAt = st.t; }
   } else {
-    if (st.capture > 0 && hi.action) { hu.stagger = CFG.captureStagger; }
+    if (st.capture >= 0.8 && hu.stagger <= 0 && st.phase === 'play') { hu.stagger = CFG.captureStagger; st.events.push({ type: 'capture_failed', t: st.t }); }
     st.capture = 0;
   }
   if (st.phase === 'play' && st.timeLeft <= 0) { st.phase = 'hunter_win'; st.reason = 'timeout'; }
@@ -292,7 +334,7 @@ export function bfsPath(sx, sz, tx, tz) {
   const s = { cx: Math.floor(sx / CELL), cz: Math.floor(sz / CELL) }, g = { cx: Math.floor(tx / CELL), cz: Math.floor(tz / CELL) };
   const key = (x, z) => x + ',' + z; const prev = new Map([[key(s.cx, s.cz), null]]); const q = [s];
   while (q.length) { const c = q.shift(); if (c.cx === g.cx && c.cz === g.cz) { const path = []; let k = key(c.cx, c.cz), cur = c; while (k) { path.unshift({ x: cur.cx * CELL + 1, z: cur.cz * CELL + 1 }); const p = prev.get(k); if (!p) break; cur = p; k = key(p.cx, p.cz); } return path; }
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = c.cx + dx, nz = c.cz + dz, k = key(nx, nz); if (prev.has(k)) continue; const cell = cellAt(nx, nz); if (cell === '#' || cell === 'B' || cell === 'S') continue; prev.set(k, c); q.push({ cx: nx, cz: nz }); } }
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = c.cx + dx, nz = c.cz + dz, k = key(nx, nz); if (prev.has(k)) continue; const cell = cellAt(nx, nz); if (cell === '#' || cell === 'B' || cell === 'S' || cell === 'L') continue; prev.set(k, c); q.push({ cx: nx, cz: nz }); } }
   return null;
 }
 function inputToward(p, target) {
@@ -302,7 +344,7 @@ function inputToward(p, target) {
   const sin = Math.sin(p.yaw), cos = Math.cos(p.yaw);
   const fwd = { x: sin, z: -cos }, right = { x: cos, z: sin };
   const ux = dx / d, uz = dz / d;
-  return { input: { moveX: ux * right.x + uz * right.z, moveZ: ux * fwd.x + uz * fwd.z, yaw: wantYaw, action: false, dash: false }, arrived: false };
+  return { input: { moveX: ux * right.x + uz * right.z, moveZ: ux * fwd.x + uz * fwd.z, yaw: wantYaw, action: false }, arrived: false };
 }
 function followPath(p, path, lookTarget) {
   if (!path || path.length === 0) return idle();
@@ -313,6 +355,14 @@ function followPath(p, path, lookTarget) {
 // ---- BOT ----
 export function botIntruder(st, mem) {
   const it = st.intruder, hu = st.hunter;
+  if (it.hidden >= 0) { // ロッカー内: ハンターが遠ざかり注視が下がったら出る（開錠され始めたら即出る）
+    const exitNow = dist(it, hu) > 9 && st.stalk < 0.3;
+    const forced = st.lockerOpen.idx === it.hidden && st.lockerOpen.progress > 0.25;
+    if (exitNow || forced || (mem.hideT = (mem.hideT || 0) + 1) > 60 * 8) { mem.hideT = 0; const a = idle(); a.action = true; return a; }
+    return idle();
+  }
+  // ピンチ: 捕獲されそう/捕捉済みなら煙幕
+  if ((st.marked > 0 && dist(it, hu) < 7) || st.capture > 0.3) { if (st.smokeStock > 0 && !st.smokes.length) { const a = idle(); a.smoke = true; return a; } }
   mem.path = mem.path || null; mem.retarget = mem.retarget || 0; mem.checked = mem.checked || {};
   const dH = dist(it, hu);
   const seesMe = seesHunter(st);
@@ -323,13 +373,15 @@ export function botIntruder(st, mem) {
   if (st.gatesOpen) { const g = GATES.slice().sort((a, b) => dist(it, a) - dist(it, b))[0]; if (dist(it, g) < CFG.interactRange - 0.2) { const a = idle(); a.action = true; a.yaw = Math.atan2(g.x - it.x, -(g.z - it.z)); return a; } if (dist(it, g) < 8 && dH > 2.8) { const inp = followPath(it, (bfsPath(it.x, it.z, g.x, g.z) || []).slice(1), g); if (setLight(false)) inp.lightToggle = true; return inp; } }
   // 逃走
   if ((seesMe && dH < 9) || dH < 5) {
+    const lk = LOCKERS.map((l, i) => ({ l, i })).filter(o => dist(it, o.l) < 5 && dist(hu, o.l) > dist(it, o.l) + 2).sort((a, b) => dist(it, a.l) - dist(it, b.l))[0];
+    if (lk && st.stalk > 0.35) { if (dist(it, lk.l) < 1.5) { const a = idle(); a.action = true; mem.hideT = 0; return a; } const inp = followPath(it, (bfsPath(it.x, it.z, lk.l.x, lk.l.z) || []).slice(1), lk.l); if (setLight(false)) inp.lightToggle = true; return inp; }
     mem.fleeT = (mem.fleeT || 0) - 1;
     if (!mem.fleeTarget || mem.fleeT <= 0) {
       let best = null, bestScore = -1e9;
       for (let a = 0; a < 8; a++) { const ang = a / 8 * Math.PI * 2, tx = it.x + Math.sin(ang) * 7, tz = it.z - Math.cos(ang) * 7; if (isBlocked(tx, tz)) continue; const hp = bfsPath(hu.x, hu.z, tx, tz); if (!hp) continue; const score = hp.length * 2 + (losClear(tx, tz, hu.x, hu.z, false) ? 0 : 5) - Math.hypot(tx - it.x, tz - it.z) * 0.3; if (score > bestScore) { bestScore = score; best = { x: tx, z: tz }; } }
       mem.fleeTarget = best; mem.fleeT = 6; mem.path = best ? bfsPath(it.x, it.z, best.x, best.z) : null;
     }
-    if (mem.fleeTarget) { const inp = followPath(it, mem.path && mem.path.slice(), hu); inp.dash = dH < 4.5; inp.yaw = Math.atan2(it.x - hu.x, -(it.z - hu.z)) + Math.PI; if (setLight(false)) inp.lightToggle = true; return inp; }
+    if (mem.fleeTarget) { const inp = followPath(it, mem.path && mem.path.slice(), hu); inp.yaw = Math.atan2(it.x - hu.x, -(it.z - hu.z)) + Math.PI; if (setLight(false)) inp.lightToggle = true; return inp; }
   } else mem.fleeTarget = null;
   // 目標決定: 発見済みの有効端末 > 未確認の候補（探索）
   let target = null;
@@ -362,8 +414,11 @@ export function botHunter(st, mem) {
   const sees = seesHunter(st);
   const lightSpotted = it.lightOn && dI < 30 && losClear(hu.x, hu.z, it.x, it.z, it.crouch);
   if (sees || (lightSpotted && dI < 18)) mem.lkp = { x: it.x, z: it.z, at: st.t };
-  let target = null, capture = false;
-  if (sees || (mem.lkp && st.t - mem.lkp.at < 6 && dI < 12)) { target = sees ? { x: it.x, z: it.z } : mem.lkp; if (sees && dI < CFG.captureRange) capture = true; }
+  let target = null;
+  // ロッカー: 入るのを見た/近くで消えたら開けに行く（前に立てば自動で開錠が進む）
+  if (st.lockerKnown >= 0) target = { ...LOCKERS[st.lockerKnown] };
+  else if (it.hidden >= 0 && mem.lkp && st.t - mem.lkp.at < 10) { const lk = LOCKERS.slice().sort((a, b) => Math.hypot(a.x - mem.lkp.x, a.z - mem.lkp.z) - Math.hypot(b.x - mem.lkp.x, b.z - mem.lkp.z))[0]; if (lk && Math.hypot(lk.x - mem.lkp.x, lk.z - mem.lkp.z) < 6) target = { ...lk }; }
+  if (!target && (sees || (mem.lkp && st.t - mem.lkp.at < 6 && dI < 12))) { target = sees ? { x: it.x, z: it.z } : mem.lkp; }
   else if (st.gatesOpen) { mem.gatePatrol = mem.gatePatrol || 0; mem.gateT = (mem.gateT || 0) + 1; if (mem.gateT > 120) { mem.gatePatrol++; mem.gateT = 0; } target = { ...GATES[mem.gatePatrol % GATES.length] }; if (dist(hu, target) < 2.2 && mem.gateT < 100) mem.gateT = 100; }
   else if (st.hunterKnow.deviceId >= 0 && st.t - st.hunterKnow.at < 25) { if (mem.knowAt !== st.hunterKnow.at) { mem.knowAt = st.hunterKnow.at; mem.reactUntil = st.t + 0.9; } if (st.t < mem.reactUntil) { const inp = idle(); inp.yaw = hu.yaw + 0.03; return inp; } const d = st.devices[st.hunterKnow.deviceId]; target = { x: d.x, z: d.z }; }
   else { const devs = st.devices; if (mem.patrolInit === undefined) { mem.patrolInit = 1; mem.patrol = Math.floor((mem.rng || Math.random)() * devs.length); } target = devs[mem.patrol % devs.length]; if (dist(hu, target) < 1.5) mem.patrol++; }
@@ -371,7 +426,6 @@ export function botHunter(st, mem) {
   mem.retarget -= 1;
   if (!mem.path || mem.retarget <= 0) { mem.path = bfsPath(hu.x, hu.z, target.x, target.z); mem.retarget = 20; }
   const inp = followPath(hu, mem.path ? mem.path.slice(1) : null, sees ? it : target);
-  if (capture) { inp.action = true; inp.moveX = 0; inp.moveZ = 0; inp.yaw = Math.atan2(it.x - hu.x, -(it.z - hu.z)); }
   return inp;
 }
 </script>
@@ -460,7 +514,7 @@ export function createNet(callbacks) {
   net.publishState = (snap) => { net.roomRef?.child('state').set(snap).catch(() => {}); };
   net.sendInput = (inp) => {
     const now = performance.now();
-    const urgent = inp.crouchToggle || inp.lightToggle; // トグルは取りこぼし厳禁
+    const urgent = inp.crouchToggle || inp.lightToggle || inp.smoke; // トグルは取りこぼし厳禁
     const j = JSON.stringify([inp.moveX, inp.moveZ, inp.yaw, inp.action, inp.dash]);
     if (!urgent && j === net.lastInputJson && now - net.lastInputSentAt < 400) return;
     if (!urgent && now - net.lastInputSentAt < 70) return;
@@ -473,7 +527,7 @@ export function createNet(callbacks) {
 </script>
 <script type="text/plain" id="src-main">// STEALTH DUEL v2 ブラウザ層: 病院マップ / 暗闇とライト / ミニマップ / 発見システム
 import * as THREE from 'three';
-import { createState, step, botHunter, botIntruder, CFG, MAP_ROWS, CELL, TERMINALS, GATES, ZONES, dist, losClear } from 'core-inline';
+import { createState, step, botHunter, botIntruder, CFG, MAP_ROWS, CELL, TERMINALS, GATES, ZONES, LOCKERS, SMOKE_PICKUP, dist, losClear, inSmoke } from 'core-inline';
 import { createNet } from 'net-inline';
 
 const $ = id => document.getElementById(id);
@@ -566,6 +620,22 @@ const gateMeshes = GATES.map(g0 => {
   g.position.set(g0.x, 0, g0.z); scene.add(g);
   return { group: g, door, lamp };
 });
+const lockerMeshes = LOCKERS.map(l => {
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 0.7), new THREE.MeshLambertMaterial({ color: 0x3d5748 })); box.position.y = 1.1; g.add(box);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.05, 0.06), new THREE.MeshLambertMaterial({ color: 0x5c7a58 })); door.geometry.translate(0.48, 0, 0); door.position.set(-0.48, 1.05, 0.38); g.add(door);
+  for (let vi = 0; vi < 3; vi++) { const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: 0x141c16 })); vent.position.set(0, 1.62 - vi * 0.16, 0.42); g.add(vent); }
+  const plate = textPlate('ロッカー', 1.0, 0.26, '#dff5d8', '#1d3020'); plate.position.set(0, 2.38, 0.2); g.add(plate);
+  // 室外を向くよう、隣の床側に扉を向ける（扉は南向き固定で配置が単純な側を採用）
+  g.position.set(l.x, 0, l.z); scene.add(g);
+  return { group: g, door };
+});
+const smokePickupMesh = new THREE.Group();
+{ const can = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 10), new THREE.MeshBasicMaterial({ color: 0xd8dde2 })); can.position.y = 0.5; smokePickupMesh.add(can);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 6, 18), new THREE.MeshBasicMaterial({ color: 0x9fb4d8 })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.06; smokePickupMesh.add(ring);
+  smokePickupMesh.position.set(SMOKE_PICKUP.x, 0, SMOKE_PICKUP.z); scene.add(smokePickupMesh); }
+const smokeMeshes = [];
+for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(CFG.smokeRadius, 14, 10), new THREE.MeshBasicMaterial({ color: 0x9aa4ae, transparent: true, opacity: 0, depthWrite: false })); m.position.y = 1.2; scene.add(m); smokeMeshes.push(m); }
 function makeFigure(color, visor) {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 1.05, 10), new THREE.MeshLambertMaterial({ color })); body.position.y = 0.85; g.add(body);
@@ -575,8 +645,6 @@ function makeFigure(color, visor) {
 }
 const hunterMesh = makeFigure(0x8c2f39, 0xff3344);
 const intruderMesh = makeFigure(0x1f6f6b, 0x39e6c8);
-const tracePool = [];
-for (let i = 0; i < 24; i++) { const m = new THREE.Mesh(new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: 0x39e6c8, transparent: true, opacity: 0 })); m.rotation.x = -Math.PI / 2; m.position.y = 0.02; scene.add(m); tracePool.push(m); }
 // ライトリグ: スポット＋漏れ光（点光源）＋光錐メッシュ（子はワールド座標で直接置く）
 const _coneGeo = new THREE.ConeGeometry(3.4, 9, 20, 1, true); _coneGeo.translate(0, -4.5, 0); // 頂点を原点に
 const _down = new THREE.Vector3(0, -1, 0);
@@ -600,9 +668,9 @@ function aimRig(rig, p, isSelf) {
 }
 
 // ---- 入力 ----
-const input = { moveX: 0, moveZ: 0, action: false, dash: false, crouchToggle: false, lightToggle: false };
+const input = { moveX: 0, moveZ: 0, action: false, crouchToggle: false, lightToggle: false, smoke: false };
 const keys = {};
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyC') input.crouchToggle = true; if (e.code === 'KeyF') input.lightToggle = true; if (['ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault(); });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyC') input.crouchToggle = true; if (e.code === 'KeyF') input.lightToggle = true; if (e.code === 'KeyG') input.smoke = true; if (['ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault(); });
 addEventListener('keyup', e => keys[e.code] = false);
 let yaw = 0, pitch = 0, pointerLocked = false;
 renderer.domElement.addEventListener('click', () => { if (playing && !isTouch) renderer.domElement.requestPointerLock?.(); });
@@ -636,7 +704,7 @@ const endTouch = e => { for (const t of e.changedTouches) { if (t.identifier ===
 app.addEventListener('touchend', endTouch); app.addEventListener('touchcancel', endTouch);
 function bindHold(id, on, off) { const el = $(id); const s = e => { e.preventDefault(); el.classList.add('on'); on(); }, x = e => { e.preventDefault(); el.classList.remove('on'); off?.(); }; el.addEventListener('touchstart', s); el.addEventListener('touchend', x); el.addEventListener('mousedown', s); el.addEventListener('mouseup', x); }
 bindHold('btnAction', () => input.action = true, () => input.action = false);
-bindHold('btnDash', () => input.dash = true, () => input.dash = false);
+bindHold('btnSmoke', () => input.smoke = true);
 bindHold('btnCrouch', () => input.crouchToggle = true);
 bindHold('btnLight', () => input.lightToggle = true);
 
@@ -648,22 +716,23 @@ function beginPlay(role) {
   const me = role === 'intruder' ? st.intruder : st.hunter; yaw = me.yaw; pitch = 0;
   $('titleScreen').classList.add('hidden'); $('endScreen').classList.add('hidden'); $('gameHud').classList.remove('hidden');
   $('roleLabel').textContent = role === 'intruder' ? '🕵️ 侵入者' : '🔦 ハンター';
-  $('btnDash').style.display = role === 'intruder' ? 'flex' : 'none';
+  $('btnSmoke').style.display = role === 'intruder' ? 'flex' : 'none';
   $('btnCrouch').style.display = role === 'intruder' ? 'flex' : 'none';
   $('btnLight').style.display = role === 'intruder' ? 'flex' : 'none';
-  $('btnAction').textContent = role === 'intruder' ? '操作' : '捕獲';
+  $('btnAction').textContent = '操作';
   notice(role === 'intruder' ? '病院に潜入。端末を探して2台起動し、南の玄関から脱出' : '赤ライトで病院を守れ。端末の反応を頼りに捕まえろ', 3000);
 }
 function startMatch(role) { st = createState(); botMemH = {}; botMemI = {}; beginPlay(role); }
 function endMatch() {
   playing = false; document.exitPointerLock?.();
   const win = (st.phase === 'intruder_win') === (playerRole === 'intruder');
-  $('endTitle').textContent = st.phase === 'intruder_win' ? '侵入者の脱出成功' : (st.reason === 'capture' ? 'ハンターが捕獲' : '時間切れ｜ハンターの守備成功');
+  $('endTitle').textContent = st.phase === 'intruder_win' ? '侵入者の脱出成功' : (st.reason === 'capture' ? 'ハンターが捕獲' : st.reason === 'locker' ? 'ロッカーの中で捕まった' : '時間切れ｜ハンターの守備成功');
   $('endDetail').textContent = (win ? 'あなたの勝ち。' : 'あなたの負け。') + `\n経過 ${st.t.toFixed(0)}秒／起動 ${st.devices.filter(d => d.done).length}台／発見 ${st.knownDevices.length}台`;
   $('gameHud').classList.add('hidden'); $('endScreen').classList.remove('hidden');
 }
+let brightV = 1;
 const brightRange = $('brightRange');
-if (brightRange) brightRange.addEventListener('input', () => { const v = Number(brightRange.value) / 100; ambLight.intensity = 1.25 * v; hemiLight.intensity = 0.7 * v; });
+if (brightRange) brightRange.addEventListener('input', () => { brightV = Number(brightRange.value) / 100; });
 $('playIntruder').onclick = () => { mode = 'offline'; startMatch('intruder'); };
 $('playHunter').onclick = () => { mode = 'offline'; startMatch('hunter'); };
 $('rematch').onclick = () => { if (mode === 'offline') startMatch(playerRole); else location.reload(); };
@@ -674,10 +743,10 @@ function playerInput() {
   const inp = {
     moveX: Math.abs(stickVec.x) > 0.12 ? stickVec.x : s,
     moveZ: Math.abs(stickVec.y) > 0.12 ? -stickVec.y : f,
-    yaw, action: input.action || !!keys.Space, dash: input.dash || !!keys.ShiftLeft || !!keys.ShiftRight,
-    crouchToggle: input.crouchToggle, lightToggle: input.lightToggle,
+    yaw, action: input.action || !!keys.Space,
+    crouchToggle: input.crouchToggle, lightToggle: input.lightToggle, smoke: input.smoke,
   };
-  input.crouchToggle = false; input.lightToggle = false;
+  input.crouchToggle = false; input.lightToggle = false; input.smoke = false;
   return inp;
 }
 function consumeEvents() {
@@ -688,6 +757,10 @@ function consumeEvents() {
     if (playerRole === 'intruder' && ev.type === 'ping') notice('信号が漏れた…ハンターに伝わった', 1600);
     if (ev.type === 'device_done') notice(`${st.devices[ev.deviceId]?.name || '端末'} 起動完了`, 1600);
     if (ev.type === 'gates_open') notice('玄関ゲートが開いた！', 2200);
+    if (ev.type === 'marked') notice(playerRole === 'intruder' ? '⚠ 捕捉された！視線を切れ！' : '捕捉した！詰め切れ', 2000);
+    if (ev.type === 'locker_in' && playerRole === 'hunter' && ev.seen) notice('ロッカーに入ったのを見た', 1800);
+    if (ev.type === 'locker_empty' && playerRole === 'hunter') notice('ロッカーは空だった…', 1400);
+    if (ev.type === 'smoke_pickup' && playerRole === 'intruder') notice('煙幕を拾った', 1200);
   }
 }
 // ---- オンライン ----
@@ -702,7 +775,9 @@ function snapOf() {
     light: st.intruder.lightOn ? 1 : 0,
     devices: st.devices.map(d => [d.tid, +d.progress.toFixed(1), d.done ? 1 : 0]),
     known: st.knownDevices, gatesOpen: st.gatesOpen, capture: +st.capture.toFixed(2), gateChannel: +st.gateChannel.toFixed(2),
-    traces: st.traces.map(t => [+t.x.toFixed(1), +t.z.toFixed(1), +t.ttl.toFixed(1)]),
+    stalk: +st.stalk.toFixed(2), marked: +st.marked.toFixed(1), hidden: st.intruder.hidden,
+    smokes: st.smokes.map(t => [+t.x.toFixed(1), +t.z.toFixed(1), +t.ttl.toFixed(1)]), smokeStock: st.smokeStock, pickupTaken: st.smokePickupTaken,
+    lockerOpen: [st.lockerOpen.idx, +st.lockerOpen.progress.toFixed(2)],
     hunterKnow: [st.hunterKnow.deviceId, +st.hunterKnow.at.toFixed(1)], events: hostEvents,
   };
 }
@@ -715,7 +790,9 @@ function applySnap(s) {
   st.devices = s.devices.map((d, i) => ({ id: i, tid: d[0], x: TERMINALS[d[0]].x, z: TERMINALS[d[0]].z, name: TERMINALS[d[0]].name, progress: d[1], done: !!d[2], charge: 0, pingAt: -1, pinged: false }));
   st.knownDevices = s.known || [];
   st.gatesOpen = s.gatesOpen; st.capture = s.capture; st.gateChannel = s.gateChannel;
-  st.traces = s.traces.map(t => ({ x: t[0], z: t[1], ttl: t[2] }));
+  st.stalk = s.stalk || 0; st.marked = s.marked || 0; st.intruder.hidden = s.hidden ?? -1;
+  st.smokes = (s.smokes || []).map(t => ({ x: t[0], z: t[1], ttl: t[2] })); st.smokeStock = s.smokeStock ?? 1; st.smokePickupTaken = !!s.pickupTaken;
+  st.lockerOpen = { idx: s.lockerOpen ? s.lockerOpen[0] : -1, progress: s.lockerOpen ? s.lockerOpen[1] : 0 };
   st.hunterKnow = { deviceId: s.hunterKnow[0], at: s.hunterKnow[1] };
   const evs = s.events || [];
   for (let i = guestEventCount; i < evs.length; i++) st.events.push(evs[i]);
@@ -730,7 +807,7 @@ function setupNet() {
     onStatus2: s => { if (s) $('netStatus').textContent = '状態: ' + s; },
     onPresence: (me, peer) => { $('netStart').classList.toggle('hidden', !(net.isHost && peer)); if (net.code) $('netStatus').textContent = `部屋 ${net.code}／${peer ? '友達が来ました' : '友達を待っています'}`; },
     onRoomReady: () => {},
-    onGuestInput: v => { guestInput = { moveX: v.moveX || 0, moveZ: v.moveZ || 0, yaw: v.yaw || 0, action: !!v.action, dash: !!v.dash, crouchToggle: !!v.crouchToggle, lightToggle: !!v.lightToggle }; },
+    onGuestInput: v => { guestInput = { moveX: v.moveX || 0, moveZ: v.moveZ || 0, yaw: v.yaw || 0, action: !!v.action, crouchToggle: !!v.crouchToggle, lightToggle: !!v.lightToggle, smoke: !!v.smoke }; },
     onSnapshot: s => applySnap(s),
   });
   return net;
@@ -803,6 +880,9 @@ function frame(now) {
 }
 function render() {
   if (!st) { renderer.render(scene, camera); return; }
+  const iHidden = st.intruder.hidden >= 0;
+  ambLight.intensity = 1.25 * brightV * (iHidden && playerRole === 'intruder' ? 1.8 : 1);
+  hemiLight.intensity = 0.7 * brightV * (iHidden && playerRole === 'intruder' ? 1.5 : 1);
   const me = playerRole === 'intruder' ? st.intruder : st.hunter;
   const foe = playerRole === 'intruder' ? st.hunter : st.intruder;
   const myMesh = playerRole === 'intruder' ? intruderMesh : hunterMesh;
@@ -816,8 +896,8 @@ function render() {
   // ライト
   const myP = { x: me.x, z: me.z, yaw };
   if (playerRole === 'hunter') { aimRig(hunterRig, myP, true); hunterRig.spot.visible = true; hunterRig.point.visible = true; aimRig(intruderRig, { x: foe.x, z: foe.z, yaw: foe.yaw }, false); intruderRig.spot.visible = intruderRig.point.visible = st.intruder.lightOn; intruderRig.cone.visible = st.intruder.lightOn; }
-  else { aimRig(intruderRig, myP, true); intruderRig.spot.visible = intruderRig.point.visible = st.intruder.lightOn; aimRig(hunterRig, { x: foe.x, z: foe.z, yaw: foe.yaw }, false); hunterRig.spot.visible = hunterRig.point.visible = true; hunterRig.cone.visible = true; }
-  scene.fog.far = playerRole === 'hunter' ? 32 : (st.intruder.lightOn ? 30 : 13);
+  else { aimRig(intruderRig, myP, true); intruderRig.spot.visible = intruderRig.point.visible = st.intruder.lightOn && st.intruder.hidden < 0; aimRig(hunterRig, { x: foe.x, z: foe.z, yaw: foe.yaw }, false); hunterRig.spot.visible = hunterRig.point.visible = true; hunterRig.cone.visible = true; }
+  scene.fog.far = (playerRole === 'intruder' && inSmoke(st, me)) ? 8 : (playerRole === 'hunter' ? 32 : (st.intruder.lightOn ? 30 : 13));
   // 端末の見た目: 有効端末のみ画面が光る
   for (const tm of termMeshes) {
     const dev = st.devices.find(dv => dv.x === tm.group.position.x && dv.z === tm.group.position.z);
@@ -825,9 +905,11 @@ function render() {
     tm.bar.scale.x = dev ? Math.max(0.001, dev.progress / CFG.deviceTime) : 0.001;
   }
   gateMeshes.forEach(m => { m.lamp.material.color.set(st.gatesOpen ? 0x39e6a3 : 0xff4444); m.door.position.x = st.gatesOpen ? 0.85 : 0; });
-  st.traces.forEach((tr, i) => { if (i < tracePool.length) { const m = tracePool[i]; m.position.x = tr.x; m.position.z = tr.z; m.material.opacity = Math.min(0.55, tr.ttl / CFG.traceLife * 0.55); } });
-  for (let i = st.traces.length; i < tracePool.length; i++) tracePool[i].material.opacity = 0;
-  renderer.render(scene, camera);
+  st.smokes.forEach((sm, i) => { if (i < smokeMeshes.length) { const m = smokeMeshes[i]; m.position.x = sm.x; m.position.z = sm.z; m.material.opacity = Math.min(0.5, sm.ttl / CFG.smokeTime * 0.6); } });
+  for (let i = st.smokes.length; i < smokeMeshes.length; i++) smokeMeshes[i].material.opacity = 0;
+  smokePickupMesh.visible = !st.smokePickupTaken;
+  lockerMeshes.forEach((lm, i) => { const occupied = st.intruder.hidden === i; const opening = st.lockerOpen.idx === i ? st.lockerOpen.progress / CFG.lockerOpenTime : 0; lm.door.rotation.y = -(occupied ? 0.5 : 0) - opening * 0.9; if (st.lockerOpen.idx === i && st.lockerOpen.progress > 0) lm.group.position.x = LOCKERS[i].x + Math.sin(performance.now() / 40) * 0.02; else lm.group.position.x = LOCKERS[i].x; });
+  intruderMesh.visible = st.intruder.hidden < 0;  renderer.render(scene, camera);
   if (!playing) return;
   const tl = Math.max(0, st.timeLeft);
   $('timer').textContent = `${Math.floor(tl / 60)}:${String(Math.floor(tl % 60)).padStart(2, '0')}`;
@@ -837,11 +919,22 @@ function render() {
   let prog = -1;
   if (playerRole === 'intruder') { const d = st.devices.find(d => !d.done && dist(me, d) < CFG.interactRange); if (d) prog = d.progress / CFG.deviceTime; if (st.gatesOpen && GATES.some(g => dist(me, g) < CFG.interactRange)) prog = st.gateChannel / CFG.gateTime; }
   else if (st.capture > 0) prog = st.capture / CFG.captureTime;
+  let barColor = '#57d7ff';
+  if (prog < 0 && playerRole === 'hunter' && st.lockerOpen.progress > 0) { prog = st.lockerOpen.progress / CFG.lockerOpenTime; barColor = '#e8eef4'; }
+  if (prog < 0 && st.stalk > 0.02) { prog = st.stalk; barColor = st.marked > 0 ? '#ff4040' : '#ff9a3c'; }
+  if (playerRole === 'intruder' && st.intruder.hidden < 0 && performance.now() - (render._lkHint || 0) > 5000 && LOCKERS.some(l => dist(me, l) < 2.1)) { render._lkHint = performance.now(); notice('「操作」でロッカーに隠れる', 1500); }
+  if (prog < 0 && playerRole === 'hunter' && st.capture > 0) { prog = st.capture; barColor = '#ff4040'; }
   $('progressWrap').style.display = prog >= 0 ? 'block' : 'none';
-  if (prog >= 0) $('progressBar').style.width = Math.min(100, prog * 100) + '%';
+  if (prog >= 0) { $('progressBar').style.width = Math.min(100, prog * 100) + '%'; $('progressBar').style.background = barColor; }
+  if (playerRole === 'intruder') $('btnSmoke').textContent = `煙幕 ×${st.smokeStock}`;
+  $('lockerOverlay').style.display = (playerRole === 'intruder' && st.intruder.hidden >= 0) ? 'block' : 'none';
+  if (playerRole === 'intruder' && st.lockerOpen.idx === st.intruder.hidden && st.intruder.hidden >= 0 && st.lockerOpen.progress > 0) notice('ロッカーが開けられている！！', 300);
   if (playerRole === 'intruder') {
     const d = dist(me, foe);
-    $('vignette').style.opacity = d < CFG.proximityRange ? String(Math.min(0.9, (1 - d / CFG.proximityRange) * 1.15)) : '0';
+    let vo = d < CFG.proximityRange ? Math.min(0.9, (1 - d / CFG.proximityRange) * 1.15) : 0;
+    if (st.marked > 0) vo = Math.max(vo, 0.6 + 0.3 * Math.sin(performance.now() / 90));
+    else if (st.stalk > 0.03) vo = Math.max(vo, st.stalk * 0.75 * (0.75 + 0.25 * Math.sin(performance.now() / Math.max(90, 300 - 200 * st.stalk))));
+    $('vignette').style.opacity = String(Math.min(0.95, vo));
     const ar = $('proxArrow');
     if (d < CFG.proximityRange) { const rel = Math.atan2(foe.x - me.x, -(foe.z - me.z)) - yaw; ar.style.display = 'block'; ar.style.transform = `translate(-50%,-50%) rotate(${rel}rad) translateY(-64px)`; }
     else ar.style.display = 'none';
