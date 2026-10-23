@@ -1,3 +1,10 @@
+> **新しい開発方針（2026-10-23）：3D潜入1vs1対戦ゲームの企画へ移行中。**
+>
+> 次に開発するAI・協力者は、最初に **[3D潜入対戦ゲームの引き継ぎ資料](docs/HANDOFF_STEALTH_2026-10-23.md)** と **[AGENTS.md](AGENTS.md)** を読んでください。
+> 現在このリポジトリにあるゲームは、**旧オフラインFPS試作**です。新しい潜入対戦ゲームは**未実装**で、基本ルールの設計段階です。以下のREADME本文は旧試作の技術資料として残しています。
+>
+> ---
+>
 # ARENA FPS
 
 **V0.1 is an offline FPS controls / aiming prototype, not yet an online multiplayer release.**
