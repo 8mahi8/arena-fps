@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>潜入1vs1（仮）｜STEALTH DUEL</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#06090f;font-family:system-ui,-apple-system,'Hiragino Sans',sans-serif;color:#eaf2ff;-webkit-user-select:none;user-select:none;touch-action:none}
+  #app{position:fixed;inset:0} canvas{display:block}
+  .hud{position:absolute;inset:0;pointer-events:none}
+  #topbar{position:absolute;top:calc(8px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;background:rgba(8,14,24,.55);border:1px solid rgba(140,190,255,.25);border-radius:999px;padding:6px 14px;font-weight:700;letter-spacing:.04em}
+  #timer{font-size:20px;font-variant-numeric:tabular-nums}
+  #objective{position:absolute;top:calc(52px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:14px;background:rgba(8,14,24,.45);padding:4px 12px;border-radius:999px;white-space:nowrap}
+  #notice{position:absolute;top:32%;left:50%;transform:translate(-50%,-50%);font-size:26px;font-weight:800;text-shadow:0 2px 14px #000;opacity:0;transition:opacity .25s;text-align:center;white-space:pre-line}
+  #crosshair{position:absolute;top:50%;left:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 6px #000}
+  #progressWrap{position:absolute;top:56%;left:50%;transform:translateX(-50%);width:180px;height:10px;background:rgba(255,255,255,.15);border-radius:99px;overflow:hidden;display:none}
+  #progressBar{height:100%;width:0%;background:#57d7ff}
+  #vignette{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(255,40,40,.55) 100%)}
+  #proxArrow{position:absolute;top:50%;left:50%;font-size:26px;color:#ff5d5d;text-shadow:0 0 8px #000;display:none}
+  .marker{position:absolute;transform:translate(-50%,-100%);font-size:12px;font-weight:700;padding:2px 7px;border-radius:99px;background:rgba(10,18,30,.65);border:1px solid rgba(255,255,255,.35);white-space:nowrap}
+  /* タッチ操作 */
+  #stick{position:absolute;left:26px;bottom:calc(26px + env(safe-area-inset-bottom));width:118px;height:118px;border-radius:50%;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.25);pointer-events:none}
+  #stickKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px;border-radius:50%;background:rgba(255,255,255,.28)}
+  .tbtn{position:absolute;pointer-events:auto;border-radius:50%;border:1.5px solid rgba(255,255,255,.35);background:rgba(20,32,52,.55);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center}
+  #btnAction{right:30px;bottom:calc(96px + env(safe-area-inset-bottom));width:96px;height:96px;font-size:17px;background:rgba(38,96,160,.6)}
+  #btnDash{right:140px;bottom:calc(34px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:13px}
+  #btnCrouch{right:38px;bottom:calc(204px + env(safe-area-inset-bottom));width:62px;height:62px;font-size:12px}
+  .tbtn.on{background:rgba(87,215,255,.55)}
+  /* 画面 */
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at 50% 35%,#12233c,#05080e 75%);text-align:center;padding:20px}
+  .screen h1{font-size:34px;margin:0;letter-spacing:.14em}
+  .screen p{margin:0;color:#b9cbe4;line-height:1.7;font-size:15px;max-width:560px}
+  .bigbtn{pointer-events:auto;font-size:18px;font-weight:800;color:#04121f;background:#57d7ff;border:0;border-radius:999px;padding:14px 30px;cursor:pointer}
+  .bigbtn.sub{background:#233a58;color:#eaf2ff}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="hud">
+  <div id="gameHud" class="hidden">
+    <div id="vignette"></div>
+    <div id="topbar"><span id="roleLabel"></span><span id="timer">3:00</span><span id="devCount"></span></div>
+    <div id="objective"></div>
+    <div id="notice"></div>
+    <div id="crosshair"></div>
+    <div id="proxArrow">▲</div>
+    <div id="progressWrap"><div id="progressBar"></div></div>
+    <div id="markers"></div>
+    <div id="stick"><div id="stickKnob"></div></div>
+    <div id="btnAction" class="tbtn">操作</div>
+    <div id="btnDash" class="tbtn">ダッシュ</div>
+    <div id="btnCrouch" class="tbtn">しゃがみ</div>
+  </div>
+  <div id="titleScreen" class="screen">
+    <h1>STEALTH DUEL</h1>
+    <p>3D潜入1vs1。侵入者は装置4か所のうち2か所を起動して、南側のゲートから脱出。ハンターは捕まえるか、3分間守り切れば勝ち。<br>音が出なくても遊べるよう、気配は画面の赤い縁で分かります。</p>
+    <div class="row">
+      <button class="bigbtn" id="playIntruder">侵入者で遊ぶ（vs BOTハンター）</button>
+      <button class="bigbtn sub" id="playHunter">ハンターで遊ぶ（vs BOT侵入者）</button>
+    </div>
+    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで装置・捕獲・脱出<br>PC: WASD＋マウス、Space長押し=操作、Shift=ダッシュ、C=しゃがみ</p>
+    <div style="border-top:1px solid rgba(140,190,255,.25);padding-top:14px;width:min(560px,92vw)">
+      <p style="font-weight:800;margin-bottom:8px">オンライン対戦（部屋番号）</p>
+      <div class="row">
+        <button class="bigbtn sub" id="netCreateHunter">ハンターで部屋を作る</button>
+        <button class="bigbtn sub" id="netCreateIntruder">侵入者で部屋を作る</button>
+      </div>
+      <div class="row" style="margin-top:10px;align-items:center">
+        <input id="netCode" inputmode="numeric" maxlength="5" placeholder="5桁の番号" style="font-size:18px;padding:10px 14px;border-radius:999px;border:1px solid rgba(140,190,255,.4);background:#0d1830;color:#fff;width:130px;text-align:center">
+        <button class="bigbtn sub" id="netJoin">参加する</button>
+        <button class="bigbtn hidden" id="netStart">対戦開始</button>
+      </div>
+      <p id="netStatus" style="font-size:13px;margin-top:8px">友達と同じ番号で対戦できます</p>
+    </div>
+  </div>
+  <div id="endScreen" class="screen hidden">
+    <h1 id="endTitle"></h1>
+    <p id="endDetail"></p>
+    <div class="row"><button class="bigbtn" id="rematch">もう一戦</button><button class="bigbtn sub" id="backTitle">タイトルへ</button></div>
+  </div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
