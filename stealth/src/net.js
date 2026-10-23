@@ -62,7 +62,6 @@ export function createNet(callbacks) {
   function attach() {
     const ref = net.roomRef, seat = net.isHost ? 'host' : 'guest', other = net.isHost ? 'guest' : 'host';
     const myPresence = ref.child(`players/${seat}`);
-    ref.child('.info/connected');
     db.ref('.info/connected').on('value', s => {
       net.connected = !!s.val();
       if (net.connected) { myPresence.update({ id: net.clientId, online: true }); myPresence.onDisconnect().update({ online: false }); }

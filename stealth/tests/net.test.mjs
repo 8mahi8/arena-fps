@@ -3,12 +3,16 @@ import { test } from 'node:test'; import assert from 'node:assert';
 // 実RTDB・実ブラウザ2画面の検証は別途（本テストはAPIレベルの整合性確認）。
 class FakeRef {
   constructor(db, path) { this.db = db; this.path = path; }
-  child(p) { return new FakeRef(this.db, this.path ? this.path + '/' + p : p); }
+  child(p) {
+    // 実SDKと同じパス検証（".", "#", "$", "[", "]" を含むセグメントは例外）
+    for (const seg of String(p).split('/')) if (/[.#$\[\]]/.test(seg)) throw new Error(`child failed: path argument was an invalid path = "${p}"`);
+    return new FakeRef(this.db, this.path ? this.path + '/' + p : p);
+  }
   get val() { return this.path.split('/').filter(Boolean).reduce((o, k) => (o == null ? o : o[k]), this.db.store); }
   set(v) { return this.db.write(this.path, v, 'set'); }
   update(v) { return this.db.write(this.path, v, 'update'); }
   once() { const v = this.val; return Promise.resolve({ val: () => (v === undefined ? null : structuredClone(v)), exists: () => v !== undefined && v !== null }); }
-  on(ev, cb) { this.db.listeners.push({ path: this.path, cb }); const v = this.val; queueMicrotask(() => cb({ val: () => (v === undefined ? null : structuredClone(v)) })); }
+  on(ev, cb) { this.db.listeners.push({ path: this.path, cb }); if (this.path === '.info/connected') { queueMicrotask(() => cb({ val: () => true })); return; } const v = this.val; queueMicrotask(() => cb({ val: () => (v === undefined ? null : structuredClone(v)) })); }
   onDisconnect() { return { update: () => Promise.resolve() }; }
   async transaction(fn) {
     const cur = this.val === undefined ? null : structuredClone(this.val);

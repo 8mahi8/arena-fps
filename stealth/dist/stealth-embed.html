@@ -27,7 +27,9 @@
   #btnCrouch{right:38px;bottom:calc(204px + env(safe-area-inset-bottom));width:62px;height:62px;font-size:12px}
   .tbtn.on{background:rgba(87,215,255,.55)}
   /* 画面 */
-  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at 50% 35%,#12233c,#05080e 75%);text-align:center;padding:20px}
+  .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:14px;background:radial-gradient(ellipse at 50% 35%,#12233c,#05080e 75%);text-align:center;padding:28px 20px 40px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .screen::before{content:'';margin-top:auto}
+  .screen::after{content:'';margin-bottom:auto}
   .screen h1{font-size:34px;margin:0;letter-spacing:.14em}
   .screen p{margin:0;color:#b9cbe4;line-height:1.7;font-size:15px;max-width:560px}
   .bigbtn{pointer-events:auto;font-size:18px;font-weight:800;color:#04121f;background:#57d7ff;border:0;border-radius:999px;padding:14px 30px;cursor:pointer}
@@ -380,7 +382,6 @@ export function createNet(callbacks) {
   function attach() {
     const ref = net.roomRef, seat = net.isHost ? 'host' : 'guest', other = net.isHost ? 'guest' : 'host';
     const myPresence = ref.child(`players/${seat}`);
-    ref.child('.info/connected');
     db.ref('.info/connected').on('value', s => {
       net.connected = !!s.val();
       if (net.connected) { myPresence.update({ id: net.clientId, online: true }); myPresence.onDisconnect().update({ online: false }); }
