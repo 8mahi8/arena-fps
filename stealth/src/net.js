@@ -83,9 +83,10 @@ export function createNet(callbacks) {
   net.publishState = (snap) => { net.roomRef?.child('state').set(snap).catch(() => {}); };
   net.sendInput = (inp) => {
     const now = performance.now();
+    const urgent = inp.crouchToggle || inp.lightToggle; // トグルは取りこぼし厳禁
     const j = JSON.stringify([inp.moveX, inp.moveZ, inp.yaw, inp.action, inp.dash]);
-    if (j === net.lastInputJson && now - net.lastInputSentAt < 400) return;
-    if (now - net.lastInputSentAt < 70) return;
+    if (!urgent && j === net.lastInputJson && now - net.lastInputSentAt < 400) return;
+    if (!urgent && now - net.lastInputSentAt < 70) return;
     net.lastInputJson = j; net.lastInputSentAt = now;
     net.roomRef?.child('guestInput').set({ ...inp, seq: ++net.inputSeq }).catch(() => {});
   };

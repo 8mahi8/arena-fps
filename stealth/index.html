@@ -25,6 +25,8 @@
   #btnAction{right:30px;bottom:calc(96px + env(safe-area-inset-bottom));width:96px;height:96px;font-size:17px;background:rgba(38,96,160,.6)}
   #btnDash{right:140px;bottom:calc(34px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:13px}
   #btnCrouch{right:38px;bottom:calc(204px + env(safe-area-inset-bottom));width:62px;height:62px;font-size:12px}
+  #btnLight{right:140px;bottom:calc(116px + env(safe-area-inset-bottom));width:62px;height:62px;font-size:12px}
+  #minimap{position:absolute;top:calc(52px + env(safe-area-inset-top));right:10px;width:150px;height:112px;border:1px solid rgba(140,190,255,.35);border-radius:8px;background:#081120;opacity:.92}
   .tbtn.on{background:rgba(87,215,255,.55)}
   /* 画面 */
   .screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:14px;background:radial-gradient(ellipse at 50% 35%,#12233c,#05080e 75%);text-align:center;padding:28px 20px 40px;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -51,18 +53,24 @@
     <div id="progressWrap"><div id="progressBar"></div></div>
     <div id="markers"></div>
     <div id="stick"><div id="stickKnob"></div></div>
+    <canvas id="minimap" width="200" height="150"></canvas>
     <div id="btnAction" class="tbtn">操作</div>
     <div id="btnDash" class="tbtn">ダッシュ</div>
     <div id="btnCrouch" class="tbtn">しゃがみ</div>
+    <div id="btnLight" class="tbtn">ライト</div>
   </div>
   <div id="titleScreen" class="screen">
     <h1>STEALTH DUEL</h1>
-    <p>3D潜入1vs1。侵入者は装置4か所のうち2か所を起動して、南側のゲートから脱出。ハンターは捕まえるか、3分間守り切れば勝ち。<br>音が出なくても遊べるよう、気配は画面の赤い縁で分かります。</p>
+    <p>夜の病院を舞台にした3D潜入1vs1。病院には端末候補が6台あり、そのうち有効なのは4台。侵入者は探して見つけた端末を2台起動し、南の玄関から脱出。ハンターは赤ライト（常時点灯）で守り、捕まえるか4分間守り切れば勝ち。<br>暗闇ではライトが要ります。でも侵入者がライトを点けると、遠くからでもバレます。ハンターの赤い光の漏れを見たら、近づいています。</p>
     <div class="row">
       <button class="bigbtn" id="playIntruder">侵入者で遊ぶ（vs BOTハンター）</button>
       <button class="bigbtn sub" id="playHunter">ハンターで遊ぶ（vs BOT侵入者）</button>
+      <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:#9fb4d8">
+        <span>画面の明るさ（明るい教室では上げる）</span>
+        <input id="brightRange" type="range" min="60" max="170" value="100" style="width:150px">
+      </div>
     </div>
-    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで装置・捕獲・脱出<br>PC: WASD＋マウス、Space長押し=操作、Shift=ダッシュ、C=しゃがみ</p>
+    <p style="font-size:13px">操作: 左スティック移動／右側ドラッグで視点／「操作」長押しで端末・捕獲・脱出／「ライト」で点灯切替（侵入者のみ）<br>PC: WASD＋マウス、Space長押し=操作、Shift=ダッシュ、C=しゃがみ、F=ライト</p>
     <div style="border-top:1px solid rgba(140,190,255,.25);padding-top:14px;width:min(560px,92vw)">
       <p style="font-weight:800;margin-bottom:8px">オンライン対戦（部屋番号）</p>
       <div class="row">
